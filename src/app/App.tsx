@@ -21,6 +21,8 @@ import { Bookings, Booking } from '../pages/Bookings';
 import { Complaints } from '../pages/Complaints';
 import { Support } from '../pages/Support';
 import { Spotlight } from '../pages/Spotlight';
+import { Payments } from '../pages/Payments';
+import { Ambassadors } from '../pages/Ambassadors';
 import { Messages } from '../pages/Messages';
 import { Content } from '../pages/Content';
 import { Learn } from '../pages/Learn';
@@ -79,6 +81,8 @@ export function App() {
           <Route path="/complaints" element={<Complaints identity={identity} />} />
           <Route path="/support" element={<Support />} />
           <Route path="/spotlight" element={<Spotlight />} />
+          <Route path="/payments" element={<Payments />} />
+          <Route path="/ambassadors" element={<Ambassadors />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/content" element={<Content identity={identity} />} />
           <Route path="/learn" element={<Learn identity={identity} />} />

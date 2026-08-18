@@ -897,6 +897,31 @@ export type PlatformStatus = {
   providerSignupsAllowed: boolean;
 };
 
+export type AmbassadorRow = {
+  userId: string; name: string; email?: string | null; phoneNumber?: string | null;
+  code?: string | null; invited: number; invitedProviders: number;
+  invitedLast30Days: number; lastInviteAt?: string | null; joinedAt: string;
+};
+
+export type AmbassadorsPage = {
+  rows: AmbassadorRow[]; totalAttributedSignups: number;
+  attributedLast30Days: number; activeReferrers: number;
+};
+
+export type AdminPaymentRow = {
+  id: string; bookingId: string; providerName: string; customerName: string;
+  customerPhone?: string | null; amount: number; currencyCode: string;
+  status: number; statusName: string; method: number; payToNumber?: string | null;
+  customerMarkedPaidAt?: string | null; customerReference?: string | null;
+  providerConfirmedAt?: string | null; disputedAt?: string | null; disputeNote?: string | null;
+  dateCreated: string;
+};
+
+export type AdminPaymentsPage = {
+  rows: AdminPaymentRow[]; disputedCount: number; awaitingCount: number;
+  settledTotal: number; notice: string;
+};
+
 export type SpotlightRow = {
   id: string; kind: string; targetId: string;
   headline: string | null; tagline: string | null; badge: string | null;
@@ -925,6 +950,14 @@ export type SupportChatMessage = {
 export type SupportChatThread = { threadId: string; messages: SupportChatMessage[] };
 
 export const adminApi = {
+  // ---- who is bringing people in ----
+  ambassadors() {
+    return apiRequest<AmbassadorsPage>(`${DASHBOARD}/ambassadors`);
+  },
+  // ---- the money loop (read-only) ----
+  payments(state: string) {
+    return apiRequest<AdminPaymentsPage>(`${DASHBOARD}/payments?state=${id(state)}`);
+  },
   // ---- the Discover stage ----
   spotlights() {
     return apiRequest<SpotlightRow[]>(`${DASHBOARD}/spotlights`);
