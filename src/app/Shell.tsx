@@ -43,6 +43,7 @@ const NAV: { to: string; label: string; icon: IconName; superOnly?: boolean }[] 
   { to: '/broadcasts', label: 'Announcements', icon: 'advert' },
   { to: '/documents', label: 'Documents', icon: 'certificate' },
   { to: '/adverts', label: 'Adverts', icon: 'advert' },
+  { to: '/spotlight', label: 'Spotlight', icon: 'spark' },
   { to: '/team', label: 'Admin team', icon: 'shield' },
   // Under Bookings rather than beside Reports: it is a working screen an operator uses to
   // decide who to ring, not a thing you export once a quarter.

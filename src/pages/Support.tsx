@@ -40,6 +40,27 @@ export function Support() {
     }
   }, []);
 
+  // The console keeps itself fresh: every 8 seconds the inbox refetches, and so does
+  // whichever conversation is open — a user's new message (or the assistant's instant
+  // reply) walks in on its own. If the admin is reading at the bottom, the thread
+  // follows it down; if they scrolled up to reread, nothing yanks them back.
+  useEffect(() => {
+    const tick = window.setInterval(() => {
+      adminApi.supportInbox().then(setRows).catch(() => undefined);
+      if (openId) {
+        adminApi.supportThread(openId)
+          .then((thread) => {
+            const el = scroller.current;
+            const stick = !!el && el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+            setMessages((prev) => (prev === null ? prev : thread.messages));
+            if (stick) requestAnimationFrame(() => { scroller.current?.scrollTo({ top: 999999 }); });
+          })
+          .catch(() => undefined);
+      }
+    }, 8000);
+    return () => window.clearInterval(tick);
+  }, [openId]);
+
   const send = async () => {
     const body = reply.trim();
     if (!body || !openId) return;
