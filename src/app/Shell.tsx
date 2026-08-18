@@ -32,6 +32,7 @@ const NAV: { to: string; label: string; icon: IconName; superOnly?: boolean }[] 
   // two say whether today is going anywhere. Buried at the bottom they would be opened once.
   { to: '/growth', label: 'Growth', icon: 'insights' },
   { to: '/demand', label: 'What people wanted', icon: 'search' },
+  { to: '/ambassadors', label: 'Ambassadors', icon: 'people' },
   { to: '/users', label: 'People', icon: 'people' },
   { to: '/catalog', label: 'Services', icon: 'services' },
   { to: '/bookings', label: 'Bookings', icon: 'booking' },
@@ -47,6 +48,7 @@ const NAV: { to: string; label: string; icon: IconName; superOnly?: boolean }[] 
   { to: '/team', label: 'Admin team', icon: 'shield' },
   // Under Bookings rather than beside Reports: it is a working screen an operator uses to
   // decide who to ring, not a thing you export once a quarter.
+  { to: '/payments', label: 'Payments', icon: 'agreement' },
   { to: '/ledger', label: 'Money owed', icon: 'agreement' },
   { to: '/reports', label: 'Reports', icon: 'agreement' },
   { to: '/audit', label: 'Audit trail', icon: 'audit' },
