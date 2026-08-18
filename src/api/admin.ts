@@ -897,6 +897,22 @@ export type PlatformStatus = {
   providerSignupsAllowed: boolean;
 };
 
+export type SpotlightRow = {
+  id: string; kind: string; targetId: string;
+  headline: string | null; tagline: string | null; badge: string | null;
+  sortOrder: number; enabled: boolean;
+  startsAt: string | null; endsAt: string | null; liveNow: boolean;
+  targetTitle: string; targetSubtitle: string | null; targetImageUrl: string | null;
+  dateCreated: string;
+};
+
+export type SpotlightTarget = { id: string; title: string; subtitle: string | null; imageUrl: string | null };
+
+export type SpotlightUpsert = {
+  kind: string; targetId: string; headline?: string | null; tagline?: string | null; badge?: string | null;
+  sortOrder: number; startsAt?: string | null; endsAt?: string | null; enabled: boolean;
+};
+
 export type SupportInboxRow = {
   threadId: string; userId: string; userName: string; userEmail?: string | null;
   lastMessage: string; lastFromAdmin: boolean; lastMessageAt: string;
@@ -909,6 +925,22 @@ export type SupportChatMessage = {
 export type SupportChatThread = { threadId: string; messages: SupportChatMessage[] };
 
 export const adminApi = {
+  // ---- the Discover stage ----
+  spotlights() {
+    return apiRequest<SpotlightRow[]>(`${DASHBOARD}/spotlights`);
+  },
+  spotlightSearch(kind: string, q: string) {
+    return apiRequest<SpotlightTarget[]>(`${DASHBOARD}/spotlights/search?kind=${id(kind)}&q=${id(q)}`);
+  },
+  spotlightCreate(body: SpotlightUpsert) {
+    return apiRequest<SpotlightRow>(`${DASHBOARD}/spotlights`, { method: 'POST', body });
+  },
+  spotlightUpdate(spotlightId: string, body: SpotlightUpsert) {
+    return apiRequest<SpotlightRow>(`${DASHBOARD}/spotlights/${id(spotlightId)}`, { method: 'PUT', body });
+  },
+  spotlightDelete(spotlightId: string) {
+    return apiRequest<boolean>(`${DASHBOARD}/spotlights/${id(spotlightId)}`, { method: 'DELETE' });
+  },
   // ---- support chat ----
   supportInbox() {
     return apiRequest<SupportInboxRow[]>(`${DASHBOARD}/support`);

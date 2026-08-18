@@ -20,6 +20,7 @@ import { Team } from '../pages/Team';
 import { Bookings, Booking } from '../pages/Bookings';
 import { Complaints } from '../pages/Complaints';
 import { Support } from '../pages/Support';
+import { Spotlight } from '../pages/Spotlight';
 import { Messages } from '../pages/Messages';
 import { Content } from '../pages/Content';
 import { Learn } from '../pages/Learn';
@@ -77,6 +78,7 @@ export function App() {
           <Route path="/bookings/:bookingId" element={<Booking identity={identity} />} />
           <Route path="/complaints" element={<Complaints identity={identity} />} />
           <Route path="/support" element={<Support />} />
+          <Route path="/spotlight" element={<Spotlight />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/content" element={<Content identity={identity} />} />
           <Route path="/learn" element={<Learn identity={identity} />} />
