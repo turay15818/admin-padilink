@@ -13,6 +13,7 @@ import {
   Pill, Row, Table, Textarea, Toasts, fmtDate, fmtDateTime, statusTone, timeAgo, useToasts,
 } from '../components/ui';
 import { SetPasswordDialog } from '../components/Password';
+import { CustomerStandingCard } from '../components/CustomerStandingCard';
 import {
   adminApi, AccountStatus,
   type AdminIdentity, type AdminUserDetail, type AdminUserSearch,
@@ -374,6 +375,11 @@ export function Person({ identity }: { identity: AdminIdentity }) {
             ))}
           </div>
         </Card>
+
+        {/* What providers have said about this person as a customer. The only screen in
+            the product where those notes are readable, and the only place a customer's
+            standing can be appealed. */}
+        <CustomerStandingCard userId={user.id} />
       </div>
 
       {file ? (

@@ -7,6 +7,7 @@ const DASHBOARD = '/api/v1/secure/admin/dashboard';
 const ADVERTS = '/api/v1/secure/admin/adverts';
 const AUTH = '/api/v1/admin/session';
 const CONTACT = '/api/v1/secure/admin/contact-messages';
+const THREATS = '/api/v1/secure/admin/threats';
 
 /** One message from the website's contact form. Mirrors ContactMessageResponse. */
 export type ContactMessage = {
@@ -922,6 +923,224 @@ export type AdminPaymentsPage = {
   settledTotal: number; notice: string;
 };
 
+export type DependencyStatus = { name: string; state: number; latencyMs: number; detail: string };
+
+export type GoldenSignals = {
+  requests: number; requestsPerMinute: number; errors: number; errorRatePercent: number;
+  medianMs: number; p95Ms: number; p99Ms: number; slowRequests: number;
+  cpuPercent: number; workingSetMb: number; threadPoolQueue: number;
+  dbConnections: number; dbMaxConnections: number;
+};
+
+export type ServiceObjective = {
+  name: string; description: string; targetPercent: number; actualPercent: number;
+  budgetRemainingPercent: number; goodEvents: number; totalEvents: number; breaching: boolean;
+};
+
+export type Anomaly = {
+  metric: string; summary: string; current: number; typicalForThisHour: number;
+  sigma: number; severity: number;
+};
+
+export type TableHealth = { name: string; size: string; sequentialScans: number; indexScans: number; liveRows: number; deadRows: number };
+export type IndexHealth = { name: string; table: string; size: string };
+export type SlowStatement = { statement: string; calls: number; totalMs: number; meanMs: number };
+
+export type DatabaseHealth = {
+  cacheHitPercent: number; connections: number; maxConnections: number;
+  rollbackPercent: number; deadlocks: number; tempBytes: number;
+  longestTransactionSeconds: number; databaseSize: string; deadTuples: number;
+  largestTables: TableHealth[]; unusedIndexes: IndexHealth[];
+  /** Null when pg_stat_statements is not installed — not the same as "no slow queries". */
+  slowStatements: SlowStatement[] | null;
+  note: string | null;
+};
+
+export type Recommendation = { title: string; detail: string; area: string; priority: number; evidence: string };
+export type AiAnalysis = { available: boolean; headline: string; recommendations: Recommendation[]; generatedAt: string; unavailable: string | null };
+
+export type OpsPoint = { at: string; requests: number; errors: number; p95Ms: number; cpuPercent: number; workingSetMb: number; threadPoolQueue: number };
+
+export type MissionControl = {
+  generatedAt: string;
+  windowHours: number;
+  /** 0 healthy, 1 degraded, 2 down. */
+  overallState: number;
+  headline: string;
+  uptimeSeconds: number;
+  signals: GoldenSignals;
+  dependencies: DependencyStatus[];
+  objectives: ServiceObjective[];
+  anomalies: Anomaly[];
+  database: DatabaseHealth;
+  series: OpsPoint[];
+  topEndpoints: EndpointStat[];
+  droppedLogRows: number;
+};
+
+export type LogRow = {
+  id: string;
+  correlationId: string;
+  occurredAt: string;
+  method: string;
+  path: string;
+  routeTemplate: string | null;
+  statusCode: number;
+  durationMs: number;
+  isSlow: boolean;
+  /** 0 information, 1 warning, 2 error. */
+  level: number;
+  userId: string | null;
+  userName: string | null;
+  ipAddress: string | null;
+  exceptionType: string | null;
+  exceptionMessage: string | null;
+};
+
+export type LogPage = {
+  items: LogRow[];
+  totalCount: number;
+  pageIndex: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type LogDetail = {
+  row: LogRow;
+  exceptionStack: string | null;
+  userAgent: string | null;
+  /** Everything else that carried the same correlation id, in order. */
+  sameCorrelation: LogRow[];
+};
+
+export type EndpointStat = {
+  routeTemplate: string;
+  method: string;
+  requests: number;
+  errors: number;
+  errorRate: number;
+  medianMs: number;
+  p95Ms: number;
+  maxMs: number;
+  /** requests x median. What decides where an afternoon is worth spending. */
+  totalMs: number;
+};
+
+export type TrafficPoint = { hour: string; requests: number; errors: number; slow: number };
+
+export type LogOverview = {
+  hours: number;
+  requests: number;
+  errors: number;
+  slow: number;
+  errorRate: number;
+  medianMs: number;
+  p95Ms: number;
+  /** Non-zero means the log queue overflowed and these numbers are incomplete. */
+  droppedRows: number;
+  slowestEndpoints: EndpointStat[];
+  mostErrors: EndpointStat[];
+  traffic: TrafficPoint[];
+};
+
+export type ClientErrorRow = {
+  id: string;
+  platform: string;
+  appVersion: string | null;
+  deviceInfo: string | null;
+  screen: string | null;
+  message: string;
+  stack: string | null;
+  correlationId: string | null;
+  userId: string | null;
+  userName: string | null;
+  occurredAt: string;
+  acknowledged: boolean;
+  occurrences: number;
+};
+
+export type ClientErrorPage = {
+  items: ClientErrorRow[];
+  totalCount: number;
+  pageIndex: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+/** A customer standing, as the app shows it to a provider. */
+export type CustomerStanding = {
+  customerUserId: string;
+  customerName: string;
+  label: string;
+  summary: string;
+  completedBookings: number;
+  cancelledLate: number;
+  noShowsReported: number;
+  ratingCount: number;
+  rating: number | null;
+  ratingVisible: boolean;
+  signals: string[];
+};
+
+/**
+ * One rating with the note attached.
+ *
+ * The note is visible here and NOWHERE else in the product - not to the customer, not to
+ * another provider. That is what makes it honest enough to settle a dispute on.
+ */
+export type AdminCustomerRating = {
+  id: string;
+  providerName: string;
+  bookingId: string;
+  rating: number;
+  showedUp: boolean;
+  paidAsAgreed: boolean;
+  respectful: boolean;
+  note: string | null;
+  voided: boolean;
+  voidReason: string | null;
+  dateCreated: string;
+};
+
+export type AdminCustomerStanding = {
+  standing: CustomerStanding;
+  ratings: AdminCustomerRating[];
+};
+
+/** One language, how many rows it has, how many are translated, and how many are live. */
+export type LanguageSummary = {
+  locale: string;
+  name: string;
+  total: number;
+  translated: number;
+  approved: number;
+  percent: number;
+};
+
+/** One English string and what somebody made of it. */
+export type PhraseRow = {
+  id: string;
+  phraseKey: string;
+  sourceText: string;
+  translatedText: string | null;
+  approved: boolean;
+  updatedByName: string | null;
+  dateUpdated: string | null;
+};
+
+export type PhrasePage = {
+  locale: string;
+  name: string;
+  total: number;
+  translated: number;
+  approved: number;
+  percent: number;
+  pageIndex: number;
+  pageSize: number;
+  totalPages: number;
+  items: PhraseRow[];
+};
+
 export type SpotlightRow = {
   id: string; kind: string; targetId: string;
   headline: string | null; tagline: string | null; badge: string | null;
@@ -949,6 +1168,199 @@ export type SupportChatMessage = {
 
 export type SupportChatThread = { threadId: string; messages: SupportChatMessage[] };
 
+// ---- the threat centre --------------------------------------------------------------------
+//
+// Mirrors ApiPadiLink.Application/Security/DTOs. Note what is NOT in these types: there is no
+// email address anywhere, because the API never stored one — accounts arrive already masked.
+
+export type ThreatBandSlice = { band: string; count: number };
+
+export type ThreatNetworkRow = {
+  ipAddress: string;
+  ipPrefix: string;
+  score: number;
+  failedLogins: number;
+  successfulLogins: number;
+  blockedRequests: number;
+  country: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  hasRule: boolean;
+  notes: string | null;
+};
+
+export type ThreatAccountRow = {
+  accountMasked: string;
+  userId: string | null;
+  failures: number;
+  lastAttemptAt: string;
+};
+
+export type SecurityEventRow = {
+  id: string;
+  occurredAt: string;
+  kind: number;
+  kindLabel: string;
+  severity: number;
+  severityLabel: string;
+  title: string;
+  detail: string | null;
+  userId: string | null;
+  userName: string | null;
+  ipAddress: string | null;
+  ipPrefix: string;
+  country: string | null;
+  deviceLabel: string | null;
+  userAgent: string | null;
+  riskScore: number;
+  acknowledged: boolean;
+  acknowledgedBy: string | null;
+  correlationId: string | null;
+  visibleToUser: boolean;
+};
+
+export type SecurityEventPage = {
+  items: SecurityEventRow[];
+  totalCount: number;
+  pageIndex: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type LoginAttemptRow = {
+  id: string;
+  occurredAt: string;
+  accountMasked: string;
+  userId: string | null;
+  succeeded: boolean;
+  failureReason: string | null;
+  method: string;
+  ipAddress: string | null;
+  ipPrefix: string;
+  country: string | null;
+  clientKind: string | null;
+  riskScore: number;
+  riskBand: string;
+  riskReasons: string | null;
+  outcome: number;
+  outcomeLabel: string;
+};
+
+export type LoginAttemptPage = {
+  items: LoginAttemptRow[];
+  totalCount: number;
+  pageIndex: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type ThreatOverview = {
+  hours: number;
+  attempts: number;
+  failures: number;
+  blocked: number;
+  distinctAccountsTargeted: number;
+  distinctNetworks: number;
+  bands: ThreatBandSlice[];
+  openAlerts: number;
+  criticalAlerts: number;
+  activeRules: number;
+  automaticRules: number;
+  worstNetworks: ThreatNetworkRow[];
+  mostTargetedAccounts: ThreatAccountRow[];
+  latestAlerts: SecurityEventRow[];
+  geoAvailable: boolean;
+  geoNote: string;
+  retentionNote: string;
+};
+
+export type NetworkRuleRow = {
+  id: string;
+  kind: number;
+  kindLabel: string;
+  value: string;
+  action: number;
+  actionLabel: string;
+  scope: number;
+  scopeLabel: string;
+  reason: string;
+  expiresAt: string | null;
+  expired: boolean;
+  autoCreated: boolean;
+  hitCount: number;
+  lastHitAt: string | null;
+  createdByName: string | null;
+  dateCreated: string;
+};
+
+export type SecurityActionResult = { succeeded: boolean; message: string };
+
+/** Who is doing what — rolled up from the request log, one row per subject per hour. */
+export type ActivitySubjectRow = {
+  subjectKind: number;
+  subjectKindLabel: string;
+  subjectKey: string;
+  userId: string | null;
+  label: string;
+  hours: number;
+  requests: number;
+  peakScore: number;
+  peakBand: string;
+  reasons: string | null;
+  explained: string[];
+  denials: number;
+  notFound: number;
+  downloads: number;
+  messagesSent: number;
+  applicationsSent: number;
+  distinctDetailTargets: number;
+  peakCadence: number;
+  firstHourAt: string;
+  lastHourAt: string;
+};
+
+export type ActivityPage = {
+  items: ActivitySubjectRow[];
+  totalCount: number;
+  pageIndex: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type ActivityHourRow = {
+  hourStartedAt: string;
+  requests: number;
+  reads: number;
+  writes: number;
+  failures: number;
+  denials: number;
+  notFound: number;
+  serverErrors: number;
+  slowRequests: number;
+  distinctRoutes: number;
+  detailViews: number;
+  distinctDetailTargets: number;
+  downloads: number;
+  messagesSent: number;
+  applicationsSent: number;
+  searchRequests: number;
+  distinctNetworks: number;
+  distinctDevices: number;
+  distinctAccounts: number;
+  medianGapMs: number;
+  cadence: number;
+  behaviourScore: number;
+  band: string;
+  explained: string[];
+};
+
+export type ActivityDetail = {
+  subject: ActivitySubjectRow;
+  hours: ActivityHourRow[];
+  recentSignIns: LoginAttemptRow[];
+  events: SecurityEventRow[];
+};
+
 export const adminApi = {
   // ---- who is bringing people in ----
   ambassadors() {
@@ -973,6 +1385,68 @@ export const adminApi = {
   },
   spotlightDelete(spotlightId: string) {
     return apiRequest<boolean>(`${DASHBOARD}/spotlights/${id(spotlightId)}`, { method: 'DELETE' });
+  },
+  // ---- mission control ----
+  missionControl(hours: number) {
+    return apiRequest<MissionControl>(`${DASHBOARD}/mission-control?hours=${hours}`);
+  },
+  missionControlAnalysis(hours: number) {
+    return apiRequest<AiAnalysis>(`${DASHBOARD}/mission-control/analysis?hours=${hours}`);
+  },
+  // ---- the logs ----
+  logOverview(hours: number) {
+    return apiRequest<LogOverview>(`${DASHBOARD}/logs/overview?hours=${hours}`);
+  },
+  logs(params: {
+    search?: string; minLevel?: number; statusCode?: number; slowOnly?: boolean;
+    userId?: string; correlationId?: string; hours?: number; pageIndex?: number; pageSize?: number;
+  }) {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '' && value !== false) {
+        query.append(key, String(value));
+      }
+    });
+    return apiRequest<LogPage>(`${DASHBOARD}/logs?${query.toString()}`);
+  },
+  logDetail(logId: string) {
+    return apiRequest<LogDetail>(`${DASHBOARD}/logs/${id(logId)}`);
+  },
+  clientErrors(unacknowledgedOnly: boolean, pageIndex: number, pageSize: number) {
+    return apiRequest<ClientErrorPage>(`${DASHBOARD}/client-errors?unacknowledgedOnly=${unacknowledgedOnly}&pageIndex=${pageIndex}&pageSize=${pageSize}`);
+  },
+  acknowledgeClientError(reportId: string) {
+    return apiRequest<boolean>(`${DASHBOARD}/client-errors/${id(reportId)}/acknowledge`, { method: 'POST' });
+  },
+  // ---- the appeal ----
+  customerStanding(userId: string) {
+    return apiRequest<AdminCustomerStanding>(`${DASHBOARD}/users/${id(userId)}/customer-standing`);
+  },
+  voidCustomerRating(ratingId: string, reason: string) {
+    return apiRequest<boolean>(`${DASHBOARD}/customer-ratings/${id(ratingId)}/void`, {
+      method: 'POST',
+      body: { reason },
+    });
+  },
+  // ---- the language desk ----
+  //
+  // Nobody on the team writes Temne or Mende. These endpoints exist so somebody who does can
+  // finish the job from a browser, and phones pick it up without a release.
+  phraseLanguages() {
+    return apiRequest<LanguageSummary[]>(`${DASHBOARD}/phrases`);
+  },
+  phrases(locale: string, q: string, untranslatedOnly: boolean, pageIndex: number, pageSize: number) {
+    const query = `q=${id(q)}&untranslatedOnly=${untranslatedOnly}&pageIndex=${pageIndex}&pageSize=${pageSize}`;
+    return apiRequest<PhrasePage>(`${DASHBOARD}/phrases/${id(locale)}?${query}`);
+  },
+  phraseSave(phraseId: string, translatedText: string | null, approved: boolean) {
+    return apiRequest<PhraseRow>(`${DASHBOARD}/phrases/${id(phraseId)}`, {
+      method: 'PUT',
+      body: { translatedText, approved },
+    });
+  },
+  phraseSync() {
+    return apiRequest<{ added: number; total: number }>(`${DASHBOARD}/phrases/sync`, { method: 'POST' });
   },
   // ---- support chat ----
   supportInbox() {
@@ -1536,5 +2010,51 @@ export const adminApi = {
     severity?: number; from?: string; to?: string; pageIndex?: number; pageSize?: number;
   }) {
     return apiRequest<AuditPage>(`${BASE}/audit?${queryString(filters)}`);
+  },
+
+  // ---- the threat centre ----
+  threatOverview(hours: number) {
+    return apiRequest<ThreatOverview>(`${THREATS}/overview?hours=${hours}`);
+  },
+  threatEvents(filters: {
+    minSeverity?: number; kind?: number; userId?: string; ipPrefix?: string;
+    unacknowledgedOnly?: boolean; hours?: number; pageIndex?: number; pageSize?: number;
+  }) {
+    return apiRequest<SecurityEventPage>(`${THREATS}/events?${queryString(filters)}`);
+  },
+  acknowledgeThreatEvent(eventId: string) {
+    return apiRequest<string>(`${THREATS}/events/${id(eventId)}/acknowledge`, { method: 'POST' });
+  },
+  threatAttempts(filters: {
+    account?: string; ipPrefix?: string; succeeded?: boolean; userId?: string;
+    minRisk?: number; hours?: number; pageIndex?: number; pageSize?: number;
+  }) {
+    return apiRequest<LoginAttemptPage>(`${THREATS}/attempts?${queryString(filters)}`);
+  },
+  threatNetworks(minScore: number, take: number) {
+    return apiRequest<ThreatNetworkRow[]>(`${THREATS}/networks?minScore=${minScore}&take=${take}`);
+  },
+  threatRules(includeExpired: boolean) {
+    return apiRequest<NetworkRuleRow[]>(`${THREATS}/rules?includeExpired=${includeExpired}`);
+  },
+  saveThreatRule(body: {
+    id?: string; kind: number; value: string; action: number; scope: number;
+    reason: string; expiresInHours?: number | null;
+  }) {
+    return apiRequest<SecurityActionResult>(`${THREATS}/rules`, { method: 'POST', body });
+  },
+  removeThreatRule(ruleId: string) {
+    return apiRequest<SecurityActionResult>(`${THREATS}/rules/${id(ruleId)}`, { method: 'DELETE' });
+  },
+  threatActivity(filters: {
+    hours?: number; minScore?: number; subjectKind?: number; search?: string;
+    pageIndex?: number; pageSize?: number;
+  }) {
+    return apiRequest<ActivityPage>(`${THREATS}/activity?${queryString(filters)}`);
+  },
+  threatActivityDetail(subjectKind: number, subjectKey: string, hours: number) {
+    // NOT encodeURIComponent: a network subject key is a CIDR and the API route is a catch-all,
+    // so the slash has to survive as a slash. The value is a hash or a CIDR — never free text.
+    return apiRequest<ActivityDetail>(`${THREATS}/activity/${subjectKind}/${subjectKey}?hours=${hours}`);
   },
 };
