@@ -109,6 +109,14 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     throw new ApiError(`Unexpected response (${response.status}) from the API.`, response.status);
   }
 
+  // 403 is announced as well as thrown. Every page already handles the throw by showing a red
+  // line of API text, which tells somebody that something failed but not that it failed because
+  // they are not allowed — and offers them nowhere to go. The event lets the shell put up a real
+  // page; the throw still happens, so nothing downstream changes behaviour.
+  if (response.status === 403) {
+    window.dispatchEvent(new CustomEvent('vacancy:forbidden', { detail: path }));
+  }
+
   if (!response.ok || payload?.status === 0) {
     throw new ApiError(payload?.message?.trim() || `Request failed (${response.status}).`, response.status);
   }

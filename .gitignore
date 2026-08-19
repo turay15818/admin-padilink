@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+_xfer/
+_to_delete/
+*.tsbuildinfo

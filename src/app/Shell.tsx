@@ -4,11 +4,12 @@
  * crisp at any zoom.
  */
 import { useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button } from '../components/ui';
 import { Icon, type IconName } from '../components/Icon';
 import { setSession } from '../api/client';
+import { Forbidden } from '../pages/ErrorPage';
 import { adminApi, SETTINGS_CHANGED, type AdminIdentity, type PlatformStatus } from '../api/admin';
 
 export function VacancyMark({ size = 30, onNavy = true }: { size?: number; onNavy?: boolean }) {
@@ -25,6 +26,10 @@ export function VacancyMark({ size = 30, onNavy = true }: { size?: number; onNav
 // renders differently on every operating system the console is opened from.
 const NAV: { to: string; label: string; icon: IconName; superOnly?: boolean }[] = [
   { to: '/', label: 'Overview', icon: 'overview' },
+  // Second in the rail, under Overview. Overview is the business - signups, bookings, money.
+  // This is the machine. Somebody arriving because "the app is slow" should not have to
+  // scroll past fifteen business screens to find out whether it is.
+  { to: '/mission-control', label: 'Mission Control', icon: 'pulse' },
   // Second, under Overview. Overview says what is waiting; this says what somebody who read
   // everything would tell you about it — which is the first thing to look at, not the last.
   { to: '/assistant', label: 'This morning', icon: 'spark' },
@@ -45,6 +50,7 @@ const NAV: { to: string; label: string; icon: IconName; superOnly?: boolean }[] 
   { to: '/documents', label: 'Documents', icon: 'certificate' },
   { to: '/adverts', label: 'Adverts', icon: 'advert' },
   { to: '/spotlight', label: 'Spotlight', icon: 'spark' },
+  { to: '/languages', label: 'Languages', icon: 'speech' },
   { to: '/team', label: 'Admin team', icon: 'shield' },
   // Under Bookings rather than beside Reports: it is a working screen an operator uses to
   // decide who to ring, not a thing you export once a quarter.
@@ -52,6 +58,12 @@ const NAV: { to: string; label: string; icon: IconName; superOnly?: boolean }[] 
   { to: '/ledger', label: 'Money owed', icon: 'agreement' },
   { to: '/reports', label: 'Reports', icon: 'agreement' },
   { to: '/audit', label: 'Audit trail', icon: 'audit' },
+  // Next to the audit trail on purpose: they answer neighbouring questions. The audit trail
+  // is who changed what; this is what the software did.
+  { to: '/logs', label: 'Logs', icon: 'logs' },
+  // Beside the logs, because it is the same question asked from the other side: the logs say
+  // what the software did, this says what was being done TO it.
+  { to: '/threats', label: 'Threat centre', icon: 'shield' },
   { to: '/settings', label: 'Settings', icon: 'lock' },
   // Also reachable by clicking your own name below — but passwords live here, and people
   // look for them in the nav before they look in a footer.
@@ -60,14 +72,36 @@ const NAV: { to: string; label: string; icon: IconName; superOnly?: boolean }[] 
 
 export function Shell({ identity }: { identity: AdminIdentity }) {
   const { t, name, toggle } = useTheme();
+
+  // A refusal from the API replaces the page, and navigating anywhere clears it. Held here
+  // rather than in each screen because every screen would otherwise need the same twelve lines,
+  // and the ones that forgot would be the ones somebody hit.
+  const location = useLocation();
+  const [forbidden, setForbidden] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onForbidden = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail;
+      setForbidden(typeof detail === 'string' ? detail : '');
+    };
+    window.addEventListener('vacancy:forbidden', onForbidden);
+    return () => window.removeEventListener('vacancy:forbidden', onForbidden);
+  }, []);
+
+  useEffect(() => { setForbidden(null); }, [location.pathname]);
   const navigate = useNavigate();
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: t.bg }}>
       {/* rail */}
+      {/* 100dvh rather than 100vh: on a laptop they are the same, but a console opened on a
+          tablet or a phone browser measures 100vh against the viewport WITHOUT the address
+          bar, which puts Sign out underneath it. overflow: hidden keeps the header and the
+          footer pinned while the middle scrolls. */}
       <aside style={{
         width: 232, flexShrink: 0, background: t.railBg, color: t.railText,
-        display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh',
+        display: 'flex', flexDirection: 'column', position: 'sticky', top: 0,
+        height: '100dvh', overflow: 'hidden',
       }}>
         <div style={{ padding: '20px 18px', display: 'flex', alignItems: 'center', gap: 11 }}>
           <VacancyMark />
@@ -77,7 +111,15 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
           </div>
         </div>
 
-        <nav style={{ padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
+        {/* minHeight: 0 and overflowY are a pair, and neither works alone. A flex child
+            defaults to min-height: auto, so it refuses to shrink below its own content and
+            grows straight past the bottom of the rail — which is why the last few sections
+            and the Sign out button below them could not be reached at all. minHeight: 0 lets
+            it shrink to the space it has; overflowY gives it somewhere to put the rest. */}
+        <nav style={{
+          padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 3, flex: 1,
+          minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
+        }}>
           {NAV.map(item => (
             <NavLink
               key={item.to}
@@ -147,7 +189,7 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
         </header>
         <ClosedBanner />
         <main style={{ padding: 22, flex: 1 }}>
-          <Outlet />
+          {forbidden !== null ? <Forbidden path={forbidden || undefined} /> : <Outlet />}
         </main>
       </div>
     </div>

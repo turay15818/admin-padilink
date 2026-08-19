@@ -18,6 +18,7 @@ import {
   Pill, Row, Table, Textarea, Toasts, fmtDateTime, useToasts,
 } from '../components/ui';
 import { adminApi, settingsChanged, type AdminIdentity, type PermissionRow, type RoleDetail, type RolesResponse, type SettingRow, type SettingsResponse } from '../api/admin';
+import { QrCode } from '../components/QrCode';
 
 export function Governance({ identity }: { identity: AdminIdentity }) {
   const { t } = useTheme();
@@ -376,7 +377,7 @@ function Settings({ identity }: { identity: AdminIdentity }) {
                   ) : null}
                 </div>
 
-                <div style={{ flexShrink: 0, minWidth: 132, textAlign: 'right' }}>
+                <div style={{ flexShrink: 0, minWidth: 132, maxWidth: 280, textAlign: 'right' }}>
                   {setting.kind === 1 ? (
                     <Button
                       size="sm"
@@ -389,7 +390,13 @@ function Settings({ identity }: { identity: AdminIdentity }) {
                   ) : (
                     <>
                       <div style={{ fontSize: 14, fontWeight: 700, color: t.text, marginBottom: 5, wordBreak: 'break-word' }}>
-                        {setting.kind === 2 ? setting.value : `“${setting.value}”`}
+                        {/* An empty setting used to draw as nothing, which put a Change
+                            button beside a blank space and read as a bug. Empty is a real
+                            answer for an address - it means "we are not on that store yet" -
+                            so it says so. */}
+                        {setting.value
+                          ? (setting.kind === 2 || setting.kind === 4 ? setting.value : `“${setting.value}”`)
+                          : <span style={{ color: t.textSubtle, fontWeight: 600 }}>Not set</span>}
                       </div>
                       <Button size="sm" tone="subtle" disabled={!canEdit} onClick={() => setEditing(setting)}>
                         Change
@@ -400,6 +407,7 @@ function Settings({ identity }: { identity: AdminIdentity }) {
               </div>
             ))}
           </Card>
+          {group === APP_GROUP ? <AppPreview settings={data.settings} /> : null}
         </div>
       ))}
 
@@ -413,6 +421,80 @@ function Settings({ identity }: { identity: AdminIdentity }) {
 
       <Toasts toasts={toasts} />
     </>
+  );
+}
+
+/** Matched against the group name the API sends, which comes from the settings catalogue. */
+const APP_GROUP = 'The app';
+
+/**
+ * What the addresses in this group actually produce.
+ *
+ * A store link is a string that looks exactly as right when it is wrong. Nothing on the
+ * platform can tell the difference — the API checks that it is a well-formed https address and
+ * stops there, because "is this the correct listing" is not a question software can answer.
+ * A person can answer it in five seconds if they can see it, so here it is: the real code from
+ * the real encoder, and both links as things to click.
+ */
+function AppPreview({ settings }: { settings: SettingRow[] }) {
+  const { t } = useTheme();
+  const value = (key: string) => settings.find(row => row.key === key)?.value?.trim() ?? '';
+
+  const getUrl = value('app.get.url');
+  const android = value('app.android.store.url');
+  const ios = value('app.ios.store.url');
+
+  if (!getUrl) return null;
+
+  return (
+    <Card style={{ marginTop: 10 }}>
+      <div style={{ display: 'flex', gap: 22, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ background: '#fff', padding: 10, borderRadius: 12, lineHeight: 0 }}>
+          <QrCode size={150} title="The code printed on posters" value={getUrl} />
+        </div>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: t.text, marginBottom: 4 }}>
+            This is the code on the poster
+          </div>
+          <div style={{ fontSize: 12.5, color: t.textMuted, lineHeight: 1.6, marginBottom: 12 }}>
+            Scan it with your own phone before you print anything. It should open your store —
+            not this console, and not a page that does not exist. Changing “the address the QR
+            code carries” changes this picture, and every poster already printed keeps pointing
+            at the old one.
+          </div>
+
+          <PreviewLink label="The code goes to" t={t} url={getUrl} />
+          <PreviewLink label="Android is sent to" missing="Not set — the QR code will offer nothing to an Android phone." t={t} url={android} />
+          <PreviewLink label="iPhone is sent to" missing="Not set — the site shows Android only, which is correct until the App Store listing is live." t={t} url={ios} />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function PreviewLink({ label, url, missing, t }: {
+  label: string;
+  url: string;
+  missing?: string;
+  t: ReturnType<typeof useTheme>['t'];
+}) {
+  return (
+    <div style={{ marginBottom: 9 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 0.3, color: t.textSubtle, textTransform: 'uppercase' }}>
+        {label}
+      </div>
+      {url ? (
+        <a
+          href={url}
+          rel="noreferrer noopener"
+          target="_blank"
+          style={{ fontSize: 12.5, color: t.brand, wordBreak: 'break-all', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+          {url}
+        </a>
+      ) : (
+        <div style={{ fontSize: 12.5, color: t.textMuted }}>{missing ?? 'Not set.'}</div>
+      )}
+    </div>
   );
 }
 
@@ -430,7 +512,10 @@ function SettingDialog({ setting, onClose, onDone }: {
   const [error, setError] = useState<string | null>(null);
 
   const ready = (!setting.consequential || reason.trim().length >= 6)
-    && (setting.kind !== 2 || /^\d+$/.test(value.trim()));
+    && (setting.kind !== 2 || /^\d+$/.test(value.trim()))
+    // Empty is allowed: "we are not on the App Store yet" is a real answer and the platform
+    // treats a blank address as "do not offer this one".
+    && (setting.kind !== 4 || value.trim() === '' || /^https:\/\/[^\s.]+\.[^\s]+/.test(value.trim()));
 
   const save = () => {
     if (!ready || busy) return;
@@ -458,8 +543,8 @@ function SettingDialog({ setting, onClose, onDone }: {
           Turning this {value === 'true' ? 'ON' : 'OFF'}.
         </div>
       ) : (
-        <Field label={setting.kind === 2 ? 'The number' : 'The words'}>
-          {setting.kind === 2
+        <Field label={setting.kind === 2 ? 'The number' : setting.kind === 4 ? 'The address' : 'The words'}>
+          {setting.kind === 2 || setting.kind === 4
             ? <Input value={value} onChange={setValue} placeholder={setting.default} onEnter={save} />
             : <Textarea value={value} onChange={setValue} placeholder={setting.default} rows={3} />}
         </Field>
@@ -468,6 +553,14 @@ function SettingDialog({ setting, onClose, onDone }: {
       {setting.kind === 2 && !/^\d+$/.test(value.trim()) ? (
         <div style={{ fontSize: 12.5, color: t.warning, margin: '-6px 0 12px' }}>
           That has to be a whole number.
+        </div>
+      ) : null}
+
+      {/* The API refuses this too. Saying so here saves a round trip and, more to the point,
+          says it while the cursor is still in the field. */}
+      {setting.kind === 4 && value.trim() && !/^https:\/\/[^\s.]+\.[^\s]+/.test(value.trim()) ? (
+        <div style={{ fontSize: 12.5, color: t.warning, margin: '-6px 0 12px' }}>
+          That has to be a full address starting with https://
         </div>
       ) : null}
 

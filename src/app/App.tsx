@@ -3,7 +3,7 @@
  * administrator — the console never decides that for itself from a stored flag.
  */
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { Shell } from './Shell';
 import { SignIn } from '../pages/SignIn';
 import { Overview } from '../pages/Overview';
@@ -21,6 +21,10 @@ import { Bookings, Booking } from '../pages/Bookings';
 import { Complaints } from '../pages/Complaints';
 import { Support } from '../pages/Support';
 import { Spotlight } from '../pages/Spotlight';
+import { Languages } from '../pages/Languages';
+import { Logs } from '../pages/Logs';
+import { MissionControl } from '../pages/MissionControl';
+import { Threats } from '../pages/Threats';
 import { Payments } from '../pages/Payments';
 import { Ambassadors } from '../pages/Ambassadors';
 import { Messages } from '../pages/Messages';
@@ -31,6 +35,7 @@ import { Governance } from '../pages/Governance';
 import { Ledger } from '../pages/Ledger';
 import { Reports } from '../pages/Reports';
 import { AcceptInvite } from '../pages/AcceptInvite';
+import { NotFound } from '../pages/ErrorPage';
 import { Loading } from '../components/ui';
 import { adminApi, type AdminIdentity } from '../api/admin';
 import { loadSession, onSessionChange } from '../api/client';
@@ -81,6 +86,10 @@ export function App() {
           <Route path="/complaints" element={<Complaints identity={identity} />} />
           <Route path="/support" element={<Support />} />
           <Route path="/spotlight" element={<Spotlight />} />
+          <Route path="/languages" element={<Languages />} />
+          <Route path="/logs" element={<Logs />} />
+          <Route path="/mission-control" element={<MissionControl />} />
+          <Route path="/threats" element={<Threats />} />
           <Route path="/payments" element={<Payments />} />
           <Route path="/ambassadors" element={<Ambassadors />} />
           <Route path="/messages" element={<Messages />} />
@@ -94,7 +103,11 @@ export function App() {
           <Route path="/ledger" element={<Ledger />} />
           <Route path="/settings" element={<Governance identity={identity} />} />
           <Route path="/account" element={<Account identity={identity} />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* A page, not a redirect. Sending an unknown URL to the overview means somebody
+              following a stale or truncated link lands on a working screen and concludes the
+              link was fine and the data has gone — the redirect hides the very mistake it is
+              meant to report. */}
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </BrowserRouter>

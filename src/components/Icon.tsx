@@ -26,7 +26,13 @@ const ICONS = {
   // happens to have a sentence on top, and the icon should not oversell it.
   spark: 'M12 3.2 13.7 9l5.8 1.7-5.8 1.7L12 18.2l-1.7-5.8L4.5 10.7 10.3 9 12 3.2Z M18.5 3v3 M17 4.5h3',
   services: 'M3 8h18v12H3V8Z M9 8V6a3 3 0 0 1 6 0v2 M3 13h18',
+  // Two speech bubbles, one behind the other: the same thing said twice, in two languages.
+  speech: 'M3 6h12v8H8l-4 3v-3H3V6Z M17 9h4v7h-1v3l-3-3h-4v-3',
   audit: 'M12 3 4 6.5v5c0 4.4 3.2 8.2 8 9.5 4.8-1.3 8-5.1 8-9.5v-5L12 3Z M12 8v4 M12 15.5v.5',
+  // Stacked lines with a pulse through them: a log is a list, and this one is alive.
+  logs: 'M4 5h16 M4 9h16 M4 13h5 M11 13h9 M4 17h16 M8.5 11l1.5 4 2-7 1.5 3',
+  // A heartbeat trace. This screen is the one you open to ask whether the thing is alive.
+  pulse: 'M2 12h4l2.5-7 4 14 3-9 2 2h4.5',
   advert: 'M3 9h4l7-4.5v15L7 15H3V9Z M18 9.5a4 4 0 0 1 0 5',
   account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M4 20.5v-.8c0-3 3.6-4.7 8-4.7s8 1.7 8 4.7v.8',
   // A calendar with a tick: a booking is a date somebody agreed to.
