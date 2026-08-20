@@ -8,10 +8,11 @@
  * resolves everything live at read time — if a target dies later, its row shows
  * "(this target was removed)" here and the app quietly skips it.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { adminApi, type SpotlightRow, type SpotlightTarget, type SpotlightUpsert } from '../api/admin';
 import { config } from '../api/client';
 import { useTheme } from '../theme/ThemeProvider';
+import { useIsNarrow } from '../lib/useViewport';
 import { Select, type Option } from '../components/Select';
 import { Button, Card, EmptyState, ErrorNote, Field, Input, Loading, PageHeader, Pill, fmtDateTime } from '../components/ui';
 
@@ -120,6 +121,29 @@ export function Spotlight() {
 
   const kindMeta = (key: string) => KINDS.find((k) => k.key === key) ?? KINDS[0];
 
+  // Two columns need about 800px before either is usable. Below that they stack.
+  const oneColumn = useIsNarrow(1040);
+
+  /**
+   * The editor scrolls itself instead of scrolling the page.
+   *
+   * It is ten fields, a phone preview and a Save button - taller than a laptop screen - so
+   * reaching Save used to mean scrolling the whole page, which took the list you were
+   * comparing against with it. Sticky below the 58px header plus the page's own padding; the
+   * height is capped at what is left so the buttons are always on screen.
+   *
+   * 100dvh rather than 100vh for the same reason as everywhere else: on a tablet, vh is
+   * measured without the browser's chrome and would push the bottom of the editor underneath
+   * it.
+   */
+  const stickyEditor: CSSProperties = {
+    position: 'sticky',
+    top: 82,
+    maxHeight: 'calc(100dvh - 106px)',
+    overflowY: 'auto',
+    overscrollBehavior: 'contain',
+  };
+
   return (
     <div style={{ padding: 24 }}>
       <PageHeader
@@ -129,7 +153,12 @@ export function Spotlight() {
       />
       {error ? <ErrorNote message={error} /> : null}
 
-      <div style={{ display: 'grid', gridTemplateColumns: draft ? 'minmax(320px, 1fr) minmax(360px, 420px)' : '1fr', gap: 16, alignItems: 'start' }}>
+      <div style={{
+          display: 'grid',
+          gridTemplateColumns: !draft || oneColumn ? '1fr' : 'minmax(320px, 1fr) minmax(380px, 460px)',
+          gap: 16,
+          alignItems: 'start',
+        }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {rows === null ? <Loading label="Opening the stage…" /> : rows.length === 0 ? (
             <EmptyState icon="🎬" title="The stage runs itself right now" message="No spotlight is configured, so the app is promoting its best featured provider automatically. Configure one to take the wheel." />
@@ -168,7 +197,7 @@ export function Spotlight() {
         </div>
 
         {draft ? (
-          <Card pad={18}>
+          <Card pad={18} style={oneColumn ? undefined : stickyEditor}>
             <div style={{ fontWeight: 800, color: t.text, fontSize: 15, marginBottom: 12 }}>{draft.id ? 'Edit the spotlight' : 'Put something on the stage'}</div>
 
             <Field label="What kind of thing stands there?">
