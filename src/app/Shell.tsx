@@ -59,13 +59,24 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    // Everything that puts something in front of somebody. Announcements, adverts and
-    // promos were three unrelated links in three parts of the old rail; they are one job.
+    // Its own group, and named the thing it is. This started life as one renamed link inside
+    // a group called Reach, which was defensible on the grounds that Broadcasts already did
+    // compose, audience and history — and wrong, because the first thing anybody said about
+    // the engine was that they could not find it. A module nobody can see is not shipped.
+    title: 'Notification engine',
+    items: [
+      { to: '/notifications', label: 'Engine home', icon: 'pulse' },
+      { to: '/broadcasts', label: 'Compose & send', icon: 'advert' },
+      { to: '/audiences', label: 'Audiences', icon: 'people' },
+      { to: '/promos', label: 'Paid promos', icon: 'agreement' },
+    ],
+  },
+  {
+    // What is left of Reach: the placements that sit and wait to be scrolled past, as
+    // opposed to the engine above, which interrupts.
     title: 'Reach',
     items: [
-      { to: '/broadcasts', label: 'Notification centre', icon: 'advert' },
       { to: '/adverts', label: 'Adverts', icon: 'advert' },
-      { to: '/promos', label: 'Paid promos', icon: 'agreement' },
       { to: '/spotlight', label: 'Spotlight', icon: 'spark' },
     ],
   },
