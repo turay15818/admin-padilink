@@ -31,6 +31,7 @@ import { Messages } from '../pages/Messages';
 import { Content } from '../pages/Content';
 import { Learn } from '../pages/Learn';
 import { Broadcasts } from '../pages/Broadcasts';
+import { Promos } from '../pages/Promos';
 import { Governance } from '../pages/Governance';
 import { Ledger } from '../pages/Ledger';
 import { Reports } from '../pages/Reports';
@@ -97,6 +98,7 @@ export function App() {
           <Route path="/learn" element={<Learn identity={identity} />} />
           <Route path="/broadcasts" element={<Broadcasts identity={identity} />} />
           <Route path="/adverts" element={<Adverts />} />
+          <Route path="/promos" element={<Promos />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="/team" element={<Team identity={identity} />} />
           <Route path="/reports" element={<Reports />} />
