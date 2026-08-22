@@ -608,10 +608,15 @@ export type Segment = {
  * so a new condition is added once. `warn` marks the one family whose audience must never be
  * sent a promotion: somebody who has just had a suspicious sign-in is owed a "was this you?",
  * not an offer.
+ *
+ * `chip` is the same family in two or three words. The editor has room for a sentence; a pill
+ * on a card does not, and a pill cannot wrap — so a family summarised only by its `label`
+ * pushes the whole page sideways on a narrow window.
  */
 export const SEGMENT_FAMILIES = {
   profileGaps: {
     label: 'Providers who have not finished setting up',
+    chip: 'Unfinished profile',
     hint: 'Any ticked gap is enough. Only ever applies to people who have a provider profile.',
     options: [
       { bit: 1, label: 'No skills listed', hint: 'Invisible in search until they add one.' },
@@ -623,6 +628,7 @@ export const SEGMENT_FAMILIES = {
   },
   signInRisks: {
     label: 'Accounts with a sign-in worth asking about',
+    chip: 'Sign-in risk',
     hint: 'Read from the security journal. Send these a “was this you?” — never a promotion.',
     warn: true,
     options: [
@@ -635,6 +641,7 @@ export const SEGMENT_FAMILIES = {
   },
   learnerStates: {
     label: 'Padi Academy',
+    chip: 'Academy',
     hint: 'Optionally narrowed to one subject below.',
     options: [
       { bit: 1, label: 'Started a course', hint: 'At least one lesson done, not finished.' },
@@ -644,6 +651,7 @@ export const SEGMENT_FAMILIES = {
   },
   jobSeekerStates: {
     label: 'Looking for work',
+    chip: 'Looking for work',
     options: [
       { bit: 1, label: 'Applied and never been picked' },
       { bit: 2, label: 'Never applied for anything' },
@@ -688,6 +696,59 @@ export type BroadcastSchedule = { waiting: ScheduledBroadcast[]; verdict: string
 export type BroadcastReach = {
   openedCount: number; deliveredCount: number; openRatePercent: number | null;
   firstOpenedAt: string | null; lastOpenedAt: string | null;
+};
+
+/* ---------- the engine's own health ---------- */
+
+/**
+ * What the sending machine actually did, as opposed to what it was asked to do.
+ *
+ * Every state below is exclusive and they add up to `written`, so a screen that renders them
+ * can be checked against itself. Rates are nullable on purpose — "0%" and "there was nothing
+ * to divide by" look identical and mean opposite things.
+ */
+export type EngineFunnel = {
+  written: number; pushed: number; opened: number;
+  muted: number; skipped: number; failed: number; pending: number;
+  pushRatePercent: number | null; openRatePercent: number | null;
+};
+
+export type EngineDay = { day: string; written: number; pushed: number; opened: number; failed: number };
+
+export type EngineType = {
+  type: string; label: string; written: number; pushed: number; opened: number;
+  openRatePercent: number | null;
+};
+
+export type EngineFault = { reason: string; count: number; meaning: string; lastSeen: string };
+
+export type EngineReach = {
+  peopleWithDevice: number; activePeople: number; percent: number | null;
+  peopleMutingSomething: number; note: string;
+};
+
+export type EngineWorkload = {
+  savedAudiences: number; scheduled: number;
+  promosAwaitingPayment: number; promosAwaitingReview: number; promosRunning: number;
+  advertsRunning: number;
+};
+
+export type EngineSend = {
+  id: string; title: string; sentAt: string | null; actorName: string; segmentName: string | null;
+  recipientCount: number; deliveredCount: number; emailedCount: number;
+  openedCount: number; openRatePercent: number | null; status: string;
+};
+
+export type NotificationEngine = {
+  funnel: EngineFunnel;
+  days: EngineDay[];
+  topTypes: EngineType[];
+  faults: EngineFault[];
+  reach: EngineReach;
+  workload: EngineWorkload;
+  recentSends: EngineSend[];
+  windowDays: number;
+  verdict: string;
 };
 
 /* ---------- money owed ---------- */
@@ -2038,6 +2099,10 @@ export const adminApi = {
   },
 
   /** What to do, why, and where. */
+  notificationEngine(days?: number) {
+    return apiRequest<NotificationEngine>(`${BASE}/notification-engine${days ? `?days=${days}` : ''}`);
+  },
+
   segments() {
     return apiRequest<Segment[]>(`${BASE}/segments`);
   },

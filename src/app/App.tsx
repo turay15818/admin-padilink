@@ -31,6 +31,10 @@ import { Messages } from '../pages/Messages';
 import { Content } from '../pages/Content';
 import { Learn } from '../pages/Learn';
 import { Broadcasts } from '../pages/Broadcasts';
+import { NotificationEnginePage } from '../pages/NotificationEngine';
+import { Audiences } from '../pages/Audiences';
+import { EditAudience } from '../pages/EditAudience';
+import { ComposeBroadcast } from '../pages/ComposeBroadcast';
 import { Promos } from '../pages/Promos';
 import { Governance } from '../pages/Governance';
 import { Ledger } from '../pages/Ledger';
@@ -96,7 +100,12 @@ export function App() {
           <Route path="/messages" element={<Messages />} />
           <Route path="/content" element={<Content identity={identity} />} />
           <Route path="/learn" element={<Learn identity={identity} />} />
+          <Route path="/notifications" element={<NotificationEnginePage />} />
           <Route path="/broadcasts" element={<Broadcasts identity={identity} />} />
+          <Route path="/audiences" element={<Audiences />} />
+          <Route path="/audiences/new" element={<EditAudience />} />
+          <Route path="/audiences/:audienceId" element={<EditAudience />} />
+          <Route path="/broadcasts/new" element={<ComposeBroadcast />} />
           <Route path="/adverts" element={<Adverts />} />
           <Route path="/promos" element={<Promos />} />
           <Route path="/audit" element={<Audit />} />
