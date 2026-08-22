@@ -24,50 +24,99 @@ export function VacancyMark({ size = 30, onNavy = true }: { size?: number; onNav
 
 // Drawn icons, not emoji: the rail has to match the front door, and an emoji font
 // renders differently on every operating system the console is opened from.
-const NAV: { to: string; label: string; icon: IconName; superOnly?: boolean }[] = [
-  { to: '/', label: 'Overview', icon: 'overview' },
-  // Second in the rail, under Overview. Overview is the business - signups, bookings, money.
-  // This is the machine. Somebody arriving because "the app is slow" should not have to
-  // scroll past fifteen business screens to find out whether it is.
-  { to: '/mission-control', label: 'Mission Control', icon: 'pulse' },
-  // Second, under Overview. Overview says what is waiting; this says what somebody who read
-  // everything would tell you about it — which is the first thing to look at, not the last.
-  { to: '/assistant', label: 'This morning', icon: 'spark' },
-  // Directly under Overview, and deliberately: Overview says what needs doing today, these
-  // two say whether today is going anywhere. Buried at the bottom they would be opened once.
-  { to: '/growth', label: 'Growth', icon: 'insights' },
-  { to: '/demand', label: 'What people wanted', icon: 'search' },
-  { to: '/ambassadors', label: 'Ambassadors', icon: 'people' },
-  { to: '/users', label: 'People', icon: 'people' },
-  { to: '/catalog', label: 'Services', icon: 'services' },
-  { to: '/bookings', label: 'Bookings', icon: 'booking' },
-  { to: '/complaints', label: 'Complaints', icon: 'flag' },
-  { to: '/support', label: 'Support chat', icon: 'people' },
-  { to: '/messages', label: 'Messages', icon: 'mail' },
-  { to: '/content', label: 'Posted content', icon: 'content' },
-  { to: '/learn', label: 'Learn', icon: 'training' },
-  { to: '/broadcasts', label: 'Announcements', icon: 'advert' },
-  { to: '/documents', label: 'Documents', icon: 'certificate' },
-  { to: '/adverts', label: 'Adverts', icon: 'advert' },
-  { to: '/spotlight', label: 'Spotlight', icon: 'spark' },
-  { to: '/languages', label: 'Languages', icon: 'speech' },
-  { to: '/team', label: 'Admin team', icon: 'shield' },
-  // Under Bookings rather than beside Reports: it is a working screen an operator uses to
-  // decide who to ring, not a thing you export once a quarter.
-  { to: '/payments', label: 'Payments', icon: 'agreement' },
-  { to: '/ledger', label: 'Money owed', icon: 'agreement' },
-  { to: '/reports', label: 'Reports', icon: 'agreement' },
-  { to: '/audit', label: 'Audit trail', icon: 'audit' },
-  // Next to the audit trail on purpose: they answer neighbouring questions. The audit trail
-  // is who changed what; this is what the software did.
-  { to: '/logs', label: 'Logs', icon: 'logs' },
-  // Beside the logs, because it is the same question asked from the other side: the logs say
-  // what the software did, this says what was being done TO it.
-  { to: '/threats', label: 'Threat centre', icon: 'shield' },
-  { to: '/settings', label: 'Settings', icon: 'lock' },
-  // Also reachable by clicking your own name below — but passwords live here, and people
-  // look for them in the nav before they look in a footer.
-  { to: '/account', label: 'Account & passwords', icon: 'account' },
+/**
+ * The rail, in groups.
+ *
+ * It was twenty-eight flat links, which is past the point where anybody reads a list — you
+ * scan for the word you remember and give up if it is not in the first ten. Grouping does not
+ * make the console smaller; it makes the SHAPE of it visible, so somebody looking for
+ * "audiences" knows to look under Reach before they start reading.
+ *
+ * The order is by how often a working day touches them: what is happening now, then the
+ * business, then the things you do TO people, then the things people do to you.
+ */
+type NavItem = { to: string; label: string; icon: IconName; superOnly?: boolean };
+type NavGroup = { title: string; items: NavItem[] };
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    // Overview says what is waiting; This morning says what somebody who read everything
+    // would tell you about it; Mission Control says whether the machine is well. First,
+    // because they are the screens a day starts on.
+    title: 'Today',
+    items: [
+      { to: '/', label: 'Overview', icon: 'overview' },
+      { to: '/assistant', label: 'This morning', icon: 'spark' },
+      { to: '/mission-control', label: 'Mission Control', icon: 'pulse' },
+    ],
+  },
+  {
+    title: 'Grow',
+    items: [
+      { to: '/growth', label: 'Growth', icon: 'insights' },
+      { to: '/demand', label: 'What people wanted', icon: 'search' },
+      { to: '/ambassadors', label: 'Ambassadors', icon: 'people' },
+    ],
+  },
+  {
+    // Everything that puts something in front of somebody. Announcements, adverts and
+    // promos were three unrelated links in three parts of the old rail; they are one job.
+    title: 'Reach',
+    items: [
+      { to: '/broadcasts', label: 'Notification centre', icon: 'advert' },
+      { to: '/adverts', label: 'Adverts', icon: 'advert' },
+      { to: '/promos', label: 'Paid promos', icon: 'agreement' },
+      { to: '/spotlight', label: 'Spotlight', icon: 'spark' },
+    ],
+  },
+  {
+    title: 'Inbox',
+    items: [
+      { to: '/support', label: 'Support chat', icon: 'people' },
+      { to: '/messages', label: 'Messages', icon: 'mail' },
+    ],
+  },
+  {
+    title: 'Marketplace',
+    items: [
+      { to: '/users', label: 'People', icon: 'people' },
+      { to: '/catalog', label: 'Services', icon: 'services' },
+      { to: '/bookings', label: 'Bookings', icon: 'booking' },
+      { to: '/content', label: 'Posted content', icon: 'content' },
+      { to: '/learn', label: 'Learn', icon: 'training' },
+      { to: '/documents', label: 'Documents', icon: 'certificate' },
+    ],
+  },
+  {
+    title: 'Money',
+    items: [
+      { to: '/payments', label: 'Payments', icon: 'agreement' },
+      { to: '/ledger', label: 'Money owed', icon: 'agreement' },
+      { to: '/reports', label: 'Reports', icon: 'agreement' },
+    ],
+  },
+  {
+    // Four screens answering neighbouring questions: what people complained about, what was
+    // done TO the platform, who changed what, and what the software itself did.
+    title: 'Safety',
+    items: [
+      { to: '/complaints', label: 'Complaints', icon: 'flag' },
+      { to: '/threats', label: 'Threat centre', icon: 'shield' },
+      { to: '/audit', label: 'Audit trail', icon: 'audit' },
+      { to: '/logs', label: 'Logs', icon: 'logs' },
+    ],
+  },
+  {
+    title: 'Setup',
+    items: [
+      { to: '/team', label: 'Admin team', icon: 'shield' },
+      { to: '/languages', label: 'Languages', icon: 'speech' },
+      { to: '/settings', label: 'Settings', icon: 'lock' },
+      // Also reachable by clicking your own name below — but passwords live here, and
+      // people look for them in the nav before they look in a footer.
+      { to: '/account', label: 'Account & passwords', icon: 'account' },
+    ],
+  },
 ];
 
 export function Shell({ identity }: { identity: AdminIdentity }) {
@@ -120,21 +169,34 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
           padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 3, flex: 1,
           minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
         }}>
-          {NAV.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              style={({ isActive }) => ({
-                display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px', borderRadius: 10,
-                textDecoration: 'none', fontSize: 13.5, fontWeight: 700,
-                color: isActive ? t.railText : t.railMuted,
-                background: isActive ? t.railActive : 'transparent',
-              })}
-            >
-              <Icon name={item.icon} size={17} />
-              {item.label}
-            </NavLink>
+          {NAV_GROUPS.map((group, index) => (
+            <div key={group.title} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* A heading, not a divider. A line between groups says "these are apart";
+                  a word says what they have in common, which is the thing being looked for. */}
+              <div style={{
+                fontSize: 10, letterSpacing: 1.3, fontWeight: 800, textTransform: 'uppercase',
+                color: t.railMuted, opacity: 0.72,
+                padding: index === 0 ? '2px 12px 4px' : '14px 12px 4px',
+              }}>
+                {group.title}
+              </div>
+              {group.items.map(item => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  style={({ isActive }) => ({
+                    display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px', borderRadius: 10,
+                    textDecoration: 'none', fontSize: 13.5, fontWeight: 700,
+                    color: isActive ? t.railText : t.railMuted,
+                    background: isActive ? t.railActive : 'transparent',
+                  })}
+                >
+                  <Icon name={item.icon} size={17} />
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 

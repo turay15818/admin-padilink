@@ -588,9 +588,94 @@ export type Segment = {
   audience: number; city: string | null;
   quietForDays: number | null; noWorkForDays: number | null;
   skillId: string | null; skillName: string | null; neverBooked: boolean;
+  // Flags. Within a family they are OR — any ticked condition qualifies somebody. Families
+  // are AND with each other, the same as every condition above them.
+  profileGaps: number;
+  signInRisks: number;
+  riskWithinDays: number | null;
+  learnerStates: number;
+  learnerSkillId: string | null;
+  learnerSkillName: string | null;
+  jobSeekerStates: number;
   describes: string; reachableNow: number;
   createdByName: string; createdAt: string; lastUsedAt: string | null; useCount: number;
 };
+
+/**
+ * The four condition families, with the words an operator reads.
+ *
+ * The bit values are the server's enums and the labels are the console's — kept side by side
+ * so a new condition is added once. `warn` marks the one family whose audience must never be
+ * sent a promotion: somebody who has just had a suspicious sign-in is owed a "was this you?",
+ * not an offer.
+ */
+export const SEGMENT_FAMILIES = {
+  profileGaps: {
+    label: 'Providers who have not finished setting up',
+    hint: 'Any ticked gap is enough. Only ever applies to people who have a provider profile.',
+    options: [
+      { bit: 1, label: 'No skills listed', hint: 'Invisible in search until they add one.' },
+      { bit: 2, label: 'No photo' },
+      { bit: 4, label: 'No bio' },
+      { bit: 8, label: 'No approved document', hint: 'Pending and rejected both count as missing.' },
+      { bit: 16, label: 'Not verified' },
+    ],
+  },
+  signInRisks: {
+    label: 'Accounts with a sign-in worth asking about',
+    hint: 'Read from the security journal. Send these a “was this you?” — never a promotion.',
+    warn: true,
+    options: [
+      { bit: 1, label: 'From a new device' },
+      { bit: 2, label: 'From a new network or country' },
+      { bit: 4, label: 'Too far from the last sign-in' },
+      { bit: 8, label: 'After repeated failures' },
+      { bit: 16, label: 'At an unusual hour' },
+    ],
+  },
+  learnerStates: {
+    label: 'Padi Academy',
+    hint: 'Optionally narrowed to one subject below.',
+    options: [
+      { bit: 1, label: 'Started a course', hint: 'At least one lesson done, not finished.' },
+      { bit: 2, label: 'Finished a course' },
+      { bit: 4, label: 'Gave up on one', hint: 'Started, then quiet for two weeks.' },
+    ],
+  },
+  jobSeekerStates: {
+    label: 'Looking for work',
+    options: [
+      { bit: 1, label: 'Applied and never been picked' },
+      { bit: 2, label: 'Never applied for anything' },
+      { bit: 4, label: 'Never finished signing up' },
+      { bit: 8, label: 'No work near them in their trade', hint: 'A demand problem before it is an audience.' },
+    ],
+  },
+} as const;
+
+export type SegmentFamilyKey = keyof typeof SEGMENT_FAMILIES;
+
+/** Somebody paying to be seen. The order, not the advert it becomes. */
+export type Promo = {
+  id: string;
+  subject: number; subjectId: string | null;
+  headline: string; body: string | null; imageUrl: string | null; ctaLabel: string | null;
+  tier: number; tierName: string;
+  audience: number; targetCity: string | null; durationDays: number;
+  priceAmount: number; currencyCode: string; pointsCost: number;
+  paymentMethod: number;
+  /** 1 draft · 2 awaiting payment · 3 pending review · 4 running · 5 rejected · 6 finished · 7 cancelled */
+  status: number; statusName: string; nextStep: string;
+  rejectionReason: string | null;
+  startsAt: string | null; endsAt: string | null; paidAt: string | null;
+  ownerName: string; ownerUserId: string; dateCreated: string;
+  impressions: number; clicks: number;
+};
+
+export const PROMO_STATUS = {
+  draft: 1, awaitingPayment: 2, pendingReview: 3, running: 4,
+  rejected: 5, finished: 6, cancelled: 7,
+} as const;
 
 export type ScheduledBroadcast = {
   id: string; title: string; body: string; scheduledFor: string; minutesAway: number;
@@ -1965,6 +2050,28 @@ export const adminApi = {
 
   deleteSegment(segmentId: string) {
     return apiRequest<boolean>(`${BASE}/segments/${segmentId}`, { method: 'DELETE' });
+  },
+
+  /* ---------- promos: people paying to be seen ---------- */
+
+  promoQueue() {
+    return apiRequest<Promo[]>(`/api/v1/secure/promos/queue`);
+  },
+
+  markPromoPaid(promoId: string, reference: string) {
+    return apiRequest<Promo>(`/api/v1/secure/promos/${promoId}/paid`, {
+      method: 'POST', body: { reference },
+    });
+  },
+
+  approvePromo(promoId: string) {
+    return apiRequest<Promo>(`/api/v1/secure/promos/${promoId}/approve`, { method: 'POST' });
+  },
+
+  rejectPromo(promoId: string, reason: string) {
+    return apiRequest<Promo>(`/api/v1/secure/promos/${promoId}/reject`, {
+      method: 'POST', body: { reason },
+    });
   },
 
   scheduled() {
