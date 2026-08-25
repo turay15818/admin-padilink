@@ -96,6 +96,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/content', label: 'Posted content', icon: 'content' },
       { to: '/learn', label: 'Learn', icon: 'training' },
       { to: '/documents', label: 'Documents', icon: 'certificate' },
+      { to: '/medical', label: 'Medical verification', icon: 'certificate' },
     ],
   },
   {

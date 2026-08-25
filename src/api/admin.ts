@@ -863,6 +863,34 @@ export type SkillPage = {
   activeCount: number; retiredCount: number;
 };
 
+/* ---------- Vacancy Health: medical credentials ---------- */
+
+/** The demo directory's ledger: how many stage actors are live, and what a seed or wipe just did. */
+export type DemoHealthStatus = {
+  demoProfessionals: number;
+  seededNow: number;
+  removedRows: number;
+};
+
+export type MedicalReviewRow = {
+  id: string;
+  providerProfileId: string;
+  providerName: string;
+  city: string | null;
+  profession: number;
+  professionLabel: string;
+  specialtyText: string | null;
+  licenseNumber: string;
+  licensingBody: string;
+  documentUrl: string;
+  supportingDocumentUrl: string | null;
+  status: number;
+  submittedAt: string;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  reviewedByName: string | null;
+};
+
 /* ---------- uploaded documents ---------- */
 
 export type AdminDocument = {
@@ -1757,6 +1785,28 @@ export const adminApi = {
     approved: boolean; reason?: string | null; alsoVerifyProvider?: boolean; silent?: boolean;
   }) {
     return apiRequest<AdminDocument>(`${BASE}/documents/${id(documentId)}/decision`, { method: 'POST', body });
+  },
+
+  // ---- Vacancy Health: the medical verification desk ----
+  medicalQueue(pendingOnly: boolean) {
+    return apiRequest<MedicalReviewRow[]>(`${BASE}/medical-credentials?pendingOnly=${pendingOnly}`);
+  },
+
+  decideMedical(credentialId: string, body: { approve: boolean; note?: string | null }) {
+    return apiRequest<MedicalReviewRow>(`${BASE}/medical-credentials/${id(credentialId)}/decide`, { method: 'POST', body });
+  },
+
+  // ---- the demo cast: seeded for the showroom, struck in one call for going live ----
+  demoHealthStatus() {
+    return apiRequest<DemoHealthStatus>(`${BASE}/demo/health`);
+  },
+
+  demoHealthSeed() {
+    return apiRequest<DemoHealthStatus>(`${BASE}/demo/health/seed`, { method: 'POST' });
+  },
+
+  demoHealthClear() {
+    return apiRequest<DemoHealthStatus>(`${BASE}/demo/health/clear`, { method: 'POST' });
   },
 
   // ---- passwords (encrypted in transit, administrators only) ----
