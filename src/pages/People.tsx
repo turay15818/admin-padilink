@@ -21,6 +21,7 @@ import {
   type CreateUserDraft, type PendingSetup, type CreatedUser,
 } from '../api/admin';
 import { MultiSelect, Select } from '../components/Select';
+import { INDIVIDUAL_SKILL_LIMIT, chipEnabled, pickedCategoryId, pickerCounter } from '../lib/skillSet';
 import { AuditRowLine } from './Audit';
 
 /* ---------------- list ---------------- */
@@ -686,7 +687,7 @@ function CreateAccount({ onClose, onDone }: {
   const [rate, setRate] = useState('');
   const [bio, setBio] = useState('');
   const [skillIds, setSkillIds] = useState<string[]>([]);
-  const [skills, setSkills] = useState<{ value: string; label: string }[]>([]);
+  const [skills, setSkills] = useState<{ id: string; name: string; categoryId: string; categoryName: string }[]>([]);
 
   // company half
   const [companyName, setCompanyName] = useState('');
@@ -695,11 +696,26 @@ function CreateAccount({ onClose, onDone }: {
   useEffect(() => {
     if (role !== 'PROVIDER') return;
     adminApi.skillPage({ pageSize: 200 })
-      .then(page => setSkills(page.items.map(skill => ({ value: skill.id, label: skill.name }))))
+      .then(page => setSkills(page.items.map(skill => ({
+        id: skill.id, name: skill.name, categoryId: skill.categoryId, categoryName: skill.categoryName,
+      }))))
       .catch(() => setSkills([]));
   }, [role]);
 
   const ready = firstName.trim().length >= 2 && email.trim().includes('@');
+
+  // The same rule the app's own picker draws itself to, and the same one the server
+  // enforces on this endpoint: a staff-created provider is a person, so one category and
+  // five skills. Offering more here would only produce a refusal at submit — which is
+  // how the admin console used to be the way round every cap in the product.
+  const pickedSkills = skills.filter(skill => skillIds.includes(skill.id)).map(skill => ({ id: skill.id, categoryId: skill.categoryId }));
+  const homeCategory = skills.find(skill => skill.categoryId === pickedCategoryId(pickedSkills)) ?? null;
+  const skillOptions = skills.map(skill => ({
+    value: skill.id,
+    label: skill.name,
+    detail: skill.categoryName,
+    disabled: !chipEnabled({ skill: { id: skill.id, categoryId: skill.categoryId }, selected: pickedSkills, limit: INDIVIDUAL_SKILL_LIMIT }),
+  }));
 
   const submit = () => {
     if (!ready || busy) return;
@@ -794,13 +810,17 @@ function CreateAccount({ onClose, onDone }: {
             <Field label="Hourly rate"><Input value={rate} onChange={setRate} placeholder="45" /></Field>
           </div>
 
-          <Field label="Services they offer" hint="From the catalogue, so nothing is invented here.">
+          <Field
+            label="Services they offer"
+            hint={`From the catalogue, so nothing is invented here. One category, up to ${INDIVIDUAL_SKILL_LIMIT} skills — the same rule their own picker follows.`}>
             <MultiSelect
               values={skillIds}
               onChange={setSkillIds}
-              options={skills}
+              options={skillOptions}
               placeholder="Choose their trades"
-              summary={values => values.length === 0 ? 'None chosen' : `${values.length} chosen`}
+              summary={values => values.length === 0
+                ? 'None chosen'
+                : `${pickerCounter(values.length, INDIVIDUAL_SKILL_LIMIT)}${homeCategory ? ` · ${homeCategory.categoryName}` : ''}`}
             />
           </Field>
 

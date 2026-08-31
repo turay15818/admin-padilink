@@ -330,6 +330,10 @@ export function MultiSelect({
     : options;
 
   const toggle = (option: Option) => {
+    // A disabled option is one the caller has decided cannot legally be added — a
+    // sixth skill, or one from a second category. Removing an already-chosen option is
+    // always allowed, so somebody is never stuck with a set they cannot edit.
+    if (option.disabled && !values.includes(option.value)) return;
     onChange(values.includes(option.value)
       ? values.filter(value => value !== option.value)
       : [...values, option.value]);
@@ -398,17 +402,19 @@ export function MultiSelect({
               <div style={{ padding: '14px 12px', color: t.textSubtle, fontSize: 13 }}>Nothing matches.</div>
             ) : visible.map(option => {
               const on = values.includes(option.value);
+              const shut = Boolean(option.disabled) && !on;
               return (
                 <div
                   key={option.value}
                   role="option"
                   aria-selected={on}
+                  aria-disabled={shut}
                   onClick={() => toggle(option)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 8,
-                    cursor: 'pointer', color: t.text,
+                    cursor: shut ? 'not-allowed' : 'pointer', color: t.text, opacity: shut ? 0.45 : 1,
                   }}
-                  onMouseEnter={event => { event.currentTarget.style.background = t.surfaceHover; }}
+                  onMouseEnter={event => { if (!shut) event.currentTarget.style.background = t.surfaceHover; }}
                   onMouseLeave={event => { event.currentTarget.style.background = 'transparent'; }}
                 >
                   <span style={{
