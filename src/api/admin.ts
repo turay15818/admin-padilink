@@ -1535,6 +1535,30 @@ export type ActivityDetail = {
   events: SecurityEventRow[];
 };
 
+/**
+ * One identity case, as a reviewer sees it.
+ *
+ * The two URLs are the point. This queue used to exist and be undrainable: a name that did
+ * not match set somebody UnderReview and kept no document, so a reviewer opened a case and
+ * saw a name and nothing else. A review queue you cannot review is worse than none — it
+ * looks like diligence and is not.
+ */
+export type IdentityCase = {
+  id: string;
+  userId: string;
+  personName: string;
+  documentName?: string | null;
+  nameMatched: boolean;
+  faceMatched: boolean;
+  faceConfidence: number;
+  doubt: string;
+  doubtLabel: string;
+  documentExpiresAt?: string | null;
+  raisedAt: string;
+  documentUrl?: string | null;
+  selfieUrl?: string | null;
+};
+
 export const adminApi = {
   // ---- who is bringing people in ----
   ambassadors() {
@@ -1785,6 +1809,15 @@ export const adminApi = {
     approved: boolean; reason?: string | null; alsoVerifyProvider?: boolean; silent?: boolean;
   }) {
     return apiRequest<AdminDocument>(`${BASE}/documents/${id(documentId)}/decision`, { method: 'POST', body });
+  },
+
+  // ---- identity: the cases a machine would not decide alone ----
+  identityQueue() {
+    return apiRequest<IdentityCase[]>(`/api/v1/secure/identity-review?origin=${encodeURIComponent(config.apiBaseUrl ?? "")}`);
+  },
+
+  decideIdentity(checkId: string, body: { approve: boolean; note?: string | null }) {
+    return apiRequest<IdentityCase>(`/api/v1/secure/identity-review/${id(checkId)}/decide`, { method: 'POST', body });
   },
 
   // ---- Vacancy Health: the medical verification desk ----
