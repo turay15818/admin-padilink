@@ -29,7 +29,9 @@ import { AuditRowLine } from './Audit';
 export function People() {
   const { t } = useTheme();
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
+  // ?q= lets another screen — a signal, a complaint — land here with the account already
+  // found, instead of asking the reviewer to retype a name they were just shown.
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('q') ?? '');
   const [page, setPage] = useState<AdminUserSearch | null>(null);
   const [pageIndex, setPageIndex] = useState(1);
   const [error, setError] = useState<string | null>(null);

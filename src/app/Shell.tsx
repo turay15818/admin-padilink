@@ -97,6 +97,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/learn', label: 'Learn', icon: 'training' },
       { to: '/documents', label: 'Documents', icon: 'certificate' },
       { to: '/identity', label: 'Identity', icon: 'certificate' },
+      { to: '/vouches', label: 'Vouches', icon: 'certificate' },
       { to: '/medical', label: 'Medical verification', icon: 'certificate' },
     ],
   },
@@ -115,6 +116,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/complaints', label: 'Complaints', icon: 'flag' },
       { to: '/threats', label: 'Threat centre', icon: 'shield' },
+      // What the nightly sweep noticed in the marketplace itself: shared IDs, one phone on
+      // many accounts, clustered reviews, unlicensed medical claims, prices far from everyone's.
+      { to: '/signals', label: 'Signals', icon: 'eye' },
       { to: '/audit', label: 'Audit trail', icon: 'audit' },
       { to: '/logs', label: 'Logs', icon: 'logs' },
     ],

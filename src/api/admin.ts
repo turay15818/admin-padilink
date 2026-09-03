@@ -1559,6 +1559,61 @@ export type IdentityCase = {
   selfieUrl?: string | null;
 };
 
+/**
+ * One vouch a machine would not verify alone, as a reviewer sees it. The two URLs are the
+ * evidence; the doubt is the machine's own reading of what did not line up.
+ */
+/**
+ * One thing the nightly sweep noticed: the same ID on two accounts, one phone on six, a
+ * customer reviewing one provider five times in a month, two people reviewing each other,
+ * a medical skill with no licence, a price four times everyone else's. A signal is a
+ * question, never a verdict — the evidence is attached so a person can answer it.
+ */
+export type TrustSignal = {
+  id: string;
+  /** 1 shared ID · 2 shared device · 3 review cluster · 4 mutual reviews · 5 unbacked medical claim · 6 price outlier */
+  kind: number;
+  kindLabel: string;
+  /** 1 low · 2 medium · 3 high */
+  severity: number;
+  severityLabel: string;
+  /** 1 open · 2 dismissed · 3 actioned */
+  status: number;
+  statusLabel: string;
+  userId?: string | null;
+  userName?: string | null;
+  summary: string;
+  /** The accounts, reviews or listings behind it, as the sweep found them. */
+  evidenceJson: string;
+  count: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  handledAt?: string | null;
+  handlingNote?: string | null;
+};
+
+export type TrustSignalSweep = { open: number; written: number; updated: number; sweptAt: string };
+
+export type VouchCase = {
+  id: string;
+  providerName: string;
+  kind: number;
+  kindLabel: string;
+  fullName: string;
+  relationship: string;
+  organisation?: string | null;
+  idName?: string | null;
+  nameMatched: boolean;
+  faceMatched: boolean;
+  faceConfidence: number;
+  doubt: string;
+  doubtLabel: string;
+  idExpiresAt?: string | null;
+  raisedAt: string;
+  photoUrl?: string | null;
+  documentUrl?: string | null;
+};
+
 export const adminApi = {
   // ---- who is bringing people in ----
   ambassadors() {
@@ -1811,6 +1866,24 @@ export const adminApi = {
     return apiRequest<AdminDocument>(`${BASE}/documents/${id(documentId)}/decision`, { method: 'POST', body });
   },
 
+  // ---- vouches: guarantors and recommenders the machine would not verify alone ----
+  /** What watches the room: the sweep's signals, open by default. Needs ManageUsers. */
+  trustSignals(openOnly = true) {
+    return apiRequest<TrustSignal[]>(`/api/v1/secure/trust-signals?openOnly=${openOnly ? 'true' : 'false'}`);
+  },
+  sweepTrustSignals() {
+    return apiRequest<TrustSignalSweep>('/api/v1/secure/trust-signals/sweep', { method: 'POST' });
+  },
+  /** 2 dismissed (reopens by itself if the signal grows) · 3 actioned. */
+  handleTrustSignal(signalId: string, body: { status: 2 | 3; note?: string | null }) {
+    return apiRequest<TrustSignal>(`/api/v1/secure/trust-signals/${id(signalId)}`, { method: 'POST', body });
+  },
+  vouchQueue() {
+    return apiRequest<VouchCase[]>(`/api/v1/secure/vouch-review?origin=${encodeURIComponent(config.apiBaseUrl ?? "")}`);
+  },
+  decideVouch(vouchId: string, body: { approve: boolean; note?: string | null }) {
+    return apiRequest<VouchCase>(`/api/v1/secure/vouch-review/${id(vouchId)}/decide`, { method: 'POST', body });
+  },
   // ---- identity: the cases a machine would not decide alone ----
   identityQueue() {
     return apiRequest<IdentityCase[]>(`/api/v1/secure/identity-review?origin=${encodeURIComponent(config.apiBaseUrl ?? "")}`);

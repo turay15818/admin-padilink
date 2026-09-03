@@ -15,6 +15,7 @@ import { Catalog } from '../pages/Catalog';
 import { Audit } from '../pages/Audit';
 import { Documents } from '../pages/Documents';
 import { Identity } from '../pages/Identity';
+import { Vouches } from '../pages/Vouches';
 import { Medical } from '../pages/Medical';
 import { Adverts } from '../pages/Adverts';
 import { Account } from '../pages/Account';
@@ -27,6 +28,7 @@ import { Languages } from '../pages/Languages';
 import { Logs } from '../pages/Logs';
 import { MissionControl } from '../pages/MissionControl';
 import { Threats } from '../pages/Threats';
+import { Signals } from '../pages/Signals';
 import { Payments } from '../pages/Payments';
 import { Ambassadors } from '../pages/Ambassadors';
 import { Messages } from '../pages/Messages';
@@ -89,6 +91,7 @@ export function App() {
           <Route path="/catalog" element={<Catalog />} />
           <Route path="/documents" element={<Documents />} />
           <Route path="/identity" element={<Identity />} />
+          <Route path="/vouches" element={<Vouches />} />
           <Route path="/medical" element={<Medical />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/bookings/:bookingId" element={<Booking identity={identity} />} />
@@ -99,6 +102,7 @@ export function App() {
           <Route path="/logs" element={<Logs />} />
           <Route path="/mission-control" element={<MissionControl />} />
           <Route path="/threats" element={<Threats />} />
+          <Route path="/signals" element={<Signals />} />
           <Route path="/payments" element={<Payments />} />
           <Route path="/ambassadors" element={<Ambassadors />} />
           <Route path="/messages" element={<Messages />} />
