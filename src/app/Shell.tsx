@@ -99,6 +99,8 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/identity', label: 'Identity', icon: 'certificate' },
       { to: '/vouches', label: 'Vouches', icon: 'certificate' },
       { to: '/medical', label: 'Medical verification', icon: 'certificate' },
+      // The same job as the licence desk above, on places rather than people.
+      { to: '/facilities', label: 'Health facilities', icon: 'certificate' },
     ],
   },
   {

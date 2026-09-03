@@ -17,6 +17,7 @@ import { Documents } from '../pages/Documents';
 import { Identity } from '../pages/Identity';
 import { Vouches } from '../pages/Vouches';
 import { Medical } from '../pages/Medical';
+import { Facilities } from '../pages/Facilities';
 import { Adverts } from '../pages/Adverts';
 import { Account } from '../pages/Account';
 import { Team } from '../pages/Team';
@@ -93,6 +94,7 @@ export function App() {
           <Route path="/identity" element={<Identity />} />
           <Route path="/vouches" element={<Vouches />} />
           <Route path="/medical" element={<Medical />} />
+          <Route path="/facilities" element={<Facilities />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/bookings/:bookingId" element={<Booking identity={identity} />} />
           <Route path="/complaints" element={<Complaints identity={identity} />} />

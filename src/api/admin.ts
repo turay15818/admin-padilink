@@ -866,6 +866,74 @@ export type SkillPage = {
 /* ---------- Vacancy Health: medical credentials ---------- */
 
 /** The demo directory's ledger: how many stage actors are live, and what a seed or wipe just did. */
+/** One facility as the desk sees it — everything a person needs to decide. */
+export type AdminFacilityRow = {
+  id: string;
+  name: string;
+  alsoKnownAs?: string | null;
+  kind: string;
+  ownership: string;
+  level: string;
+  status: string;
+  city?: string | null;
+  province?: string | null;
+  area?: string | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  phone?: string | null;
+  emergencyPhone?: string | null;
+  ambulancePhone?: string | null;
+  open24Hours: boolean;
+  hasEmergency: boolean;
+  freeCareForMothersAndUnder5s: boolean;
+  verified: boolean;
+  confirmedAt?: string | null;
+  /** "Checked 3 weeks ago", "Nobody has checked this". The reviewer's own prompt. */
+  freshness: string;
+  isStale: boolean;
+  sourceNote?: string | null;
+  serviceCount: number;
+  openReports: number;
+  claimPending: boolean;
+  claimedByName?: string | null;
+  claimedByEmail?: string | null;
+  claimedAt?: string | null;
+};
+
+export type AdminFacilityList = {
+  items: AdminFacilityRow[];
+  totalCount: number;
+  drafts: number;
+  unverified: number;
+  stale: number;
+  openReports: number;
+  pendingClaims: number;
+};
+
+export type AdminFacilityReport = {
+  id: string;
+  facilityId: string;
+  facilityName: string;
+  kind: string;
+  kindLabel: string;
+  what: string;
+  status: string;
+  reportedByName?: string | null;
+  reportedAt: string;
+  reviewedAt?: string | null;
+  reviewNote?: string | null;
+};
+
+export type ImportFacilitiesResult = {
+  dryRun: boolean;
+  added: number;
+  updated: number;
+  skipped: number;
+  notes: string[];
+  rules: string[];
+};
+
 export type DemoHealthStatus = {
   demoProfessionals: number;
   seededNow: number;
@@ -2384,5 +2452,49 @@ export const adminApi = {
     // NOT encodeURIComponent: a network subject key is a CIDR and the API route is a catch-all,
     // so the slash has to survive as a slash. The value is a hash or a CIDR — never free text.
     return apiRequest<ActivityDetail>(`${THREATS}/activity/${subjectKind}/${subjectKey}?hours=${hours}`);
+  },
+
+  // ---- Vacancy Health: the facility desk ----
+  //
+  // Every screen in the app prints "checked three weeks ago by our team". This is where a
+  // person makes that sentence true, and `confirmFacility` is the only call in the platform
+  // that writes a checked-on date.
+
+  facilityQueue(params: { search?: string; status?: string; needsAttention?: boolean; skip?: number; take?: number } = {}) {
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    if (params.status) query.set('status', params.status);
+    query.set('needsAttention', String(params.needsAttention ?? true));
+    query.set('skip', String(params.skip ?? 0));
+    query.set('take', String(params.take ?? 25));
+    return apiRequest<AdminFacilityList>(`${BASE}/facilities?${query.toString()}`);
+  },
+
+  confirmFacility(facilityId: string, body: { verified: boolean; note?: string | null }) {
+    return apiRequest<AdminFacilityRow>(`${BASE}/facilities/${id(facilityId)}/confirm`, { method: 'POST', body });
+  },
+
+  setFacilityStatus(facilityId: string, body: { status: string; note?: string | null; mergeIntoFacilityId?: string | null }) {
+    return apiRequest<AdminFacilityRow>(`${BASE}/facilities/${id(facilityId)}/status`, { method: 'POST', body });
+  },
+
+  answerFacilityClaim(facilityId: string, body: { approve: boolean; note?: string | null }) {
+    return apiRequest<AdminFacilityRow>(`${BASE}/facilities/${id(facilityId)}/claim`, { method: 'POST', body });
+  },
+
+  editFacility(facilityId: string, body: Partial<AdminFacilityRow>) {
+    return apiRequest<AdminFacilityRow>(`${BASE}/facilities/${id(facilityId)}`, { method: 'PUT', body });
+  },
+
+  importFacilities(body: { source: string; rows: unknown[]; dryRun: boolean }) {
+    return apiRequest<ImportFacilitiesResult>(`${BASE}/facilities/import`, { method: 'POST', body });
+  },
+
+  facilityReports(openOnly: boolean) {
+    return apiRequest<AdminFacilityReport[]>(`${BASE}/facilities/reports?openOnly=${openOnly}&take=100`);
+  },
+
+  resolveFacilityReport(reportId: string, body: { acted: boolean; note: string }) {
+    return apiRequest<string>(`${BASE}/facilities/reports/${id(reportId)}/resolve`, { method: 'POST', body });
   },
 };
