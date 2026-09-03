@@ -92,20 +92,20 @@ export function Facilities() {
       {/* The triage. Everything a reviewer needs to know before choosing where to start. */}
       {data ? (
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-          <Count label="Drafts" value={data.drafts} hint="Not public yet" tone={data.drafts ? 'warn' : 'neutral'} />
-          <Count label="Never checked" value={data.unverified} hint="Live, but nobody has rung them" tone={data.unverified ? 'warn' : 'neutral'} />
-          <Count label="Stale" value={data.stale} hint="Checked over six months ago" tone={data.stale ? 'warn' : 'neutral'} />
-          <Count label="Claims waiting" value={data.pendingClaims} hint="Somebody says they work there" tone={data.pendingClaims ? 'warn' : 'neutral'} />
-          <Count label="Reports" value={data.openReports} hint="Somebody went there and told us" tone={data.openReports ? 'bad' : 'neutral'} />
+          <Count label="Drafts" value={data.drafts} hint="Not public yet" tone={data.drafts ? 'warning' : 'neutral'} />
+          <Count label="Never checked" value={data.unverified} hint="Live, but nobody has rung them" tone={data.unverified ? 'warning' : 'neutral'} />
+          <Count label="Stale" value={data.stale} hint="Checked over six months ago" tone={data.stale ? 'warning' : 'neutral'} />
+          <Count label="Claims waiting" value={data.pendingClaims} hint="Somebody says they work there" tone={data.pendingClaims ? 'warning' : 'neutral'} />
+          <Count label="Reports" value={data.openReports} hint="Somebody went there and told us" tone={data.openReports ? 'danger' : 'neutral'} />
         </div>
       ) : null}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        <Button variant={tab === 'queue' ? 'primary' : 'ghost'} onClick={() => setTab('queue')}>The queue</Button>
-        <Button variant={tab === 'reports' ? 'primary' : 'ghost'} onClick={() => setTab('reports')}>
+        <Button tone={tab === 'queue' ? 'primary' : 'ghost'} onClick={() => setTab('queue')}>The queue</Button>
+        <Button tone={tab === 'reports' ? 'primary' : 'ghost'} onClick={() => setTab('reports')}>
           Reports{reports?.length ? ` (${reports.length})` : ''}
         </Button>
-        <Button variant={tab === 'import' ? 'primary' : 'ghost'} onClick={() => setTab('import')}>Bring in a list</Button>
+        <Button tone={tab === 'import' ? 'primary' : 'ghost'} onClick={() => setTab('import')}>Bring in a list</Button>
       </div>
 
       {tab === 'queue' ? (
@@ -117,7 +117,7 @@ export function Facilities() {
                   <Input value={search} onChange={setSearch} placeholder="A name or a town" />
                 </Field>
               </div>
-              <Button variant={needsAttention ? 'primary' : 'ghost'} onClick={() => setNeedsAttention(v => !v)}>
+              <Button tone={needsAttention ? 'primary' : 'ghost'} onClick={() => setNeedsAttention(v => !v)}>
                 {needsAttention ? 'Showing what needs a person' : 'Showing everything'}
               </Button>
             </div>
@@ -135,43 +135,43 @@ export function Facilities() {
                   <Row key={row.id}>
                     <Cell>
                       <div style={{ fontWeight: 700, color: t.text }}>{row.name}</div>
-                      <div style={{ fontSize: 12, color: t.muted }}>
+                      <div style={{ fontSize: 12, color: t.textMuted }}>
                         {row.kind}{row.level && row.level !== 'Unknown' ? ` · ${row.level}` : ''}
                         {row.serviceCount ? ` · ${row.serviceCount} services` : ' · no services listed'}
                       </div>
-                      {row.sourceNote ? <div style={{ fontSize: 11.5, color: t.muted2, marginTop: 2 }}>{row.sourceNote}</div> : null}
+                      {row.sourceNote ? <div style={{ fontSize: 11.5, color: t.textSubtle, marginTop: 2 }}>{row.sourceNote}</div> : null}
                     </Cell>
-                    <Cell>{row.ownership === 'Unknown' ? <Pill tone="warn">Not known</Pill> : row.ownership}</Cell>
+                    <Cell>{row.ownership === 'Unknown' ? <Pill tone="warning">Not known</Pill> : row.ownership}</Cell>
                     <Cell>
                       <div>{[row.area, row.city].filter(Boolean).join(', ') || '—'}</div>
                       {/* A place with no pin cannot give directions. Worth seeing at a glance. */}
-                      {row.latitude == null ? <div style={{ fontSize: 11.5, color: t.muted2 }}>no map pin</div> : null}
-                      {row.phone ? <div style={{ fontSize: 11.5, color: t.muted2 }}>{row.phone}</div> : <div style={{ fontSize: 11.5, color: t.muted2 }}>no number</div>}
+                      {row.latitude == null ? <div style={{ fontSize: 11.5, color: t.textSubtle }}>no map pin</div> : null}
+                      {row.phone ? <div style={{ fontSize: 11.5, color: t.textSubtle }}>{row.phone}</div> : <div style={{ fontSize: 11.5, color: t.textSubtle }}>no number</div>}
                     </Cell>
                     <Cell>
                       {/* The server writes this sentence, so the desk and the app never disagree. */}
-                      <span style={{ color: row.isStale ? t.warn : t.text }}>{row.freshness}</span>
+                      <span style={{ color: row.isStale ? t.warning : t.text }}>{row.freshness}</span>
                     </Cell>
                     <Cell>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {row.status === 'Draft' ? <Pill tone="warn">Draft</Pill> : null}
-                        {row.status === 'Closed' ? <Pill tone="bad">Closed</Pill> : null}
-                        {row.claimPending ? <Pill tone="warn">Claim</Pill> : null}
-                        {row.openReports ? <Pill tone="bad">{row.openReports} report{row.openReports === 1 ? '' : 's'}</Pill> : null}
-                        {row.verified ? <Pill tone="good">Confirmed</Pill> : null}
+                        {row.status === 'Draft' ? <Pill tone="warning">Draft</Pill> : null}
+                        {row.status === 'Closed' ? <Pill tone="danger">Closed</Pill> : null}
+                        {row.claimPending ? <Pill tone="warning">Claim</Pill> : null}
+                        {row.openReports ? <Pill tone="danger">{row.openReports} report{row.openReports === 1 ? '' : 's'}</Pill> : null}
+                        {row.verified ? <Pill tone="success">Confirmed</Pill> : null}
                       </div>
                     </Cell>
                     <Cell>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        <Button variant="primary" onClick={() => { setNote(''); setConfirming(row); }}>Confirm</Button>
+                        <Button tone="primary" onClick={() => { setNote(''); setConfirming(row); }}>Confirm</Button>
                         {row.status === 'Draft' ? (
-                          <Button variant="ghost" onClick={() => act(() => adminApi.setFacilityStatus(row.id, { status: 'Listed' }), 'Published.')}>Publish</Button>
+                          <Button tone="ghost" onClick={() => act(() => adminApi.setFacilityStatus(row.id, { status: 'Listed' }), 'Published.')}>Publish</Button>
                         ) : null}
                         {row.status === 'Listed' ? (
-                          <Button variant="ghost" onClick={() => act(() => adminApi.setFacilityStatus(row.id, { status: 'Closed' }), 'Marked closed.')}>Closed</Button>
+                          <Button tone="ghost" onClick={() => act(() => adminApi.setFacilityStatus(row.id, { status: 'Closed' }), 'Marked closed.')}>Closed</Button>
                         ) : null}
                         {row.claimPending ? (
-                          <Button variant="ghost" onClick={() => { setNote(''); setClaiming(row); }}>Claim…</Button>
+                          <Button tone="ghost" onClick={() => { setNote(''); setClaiming(row); }}>Claim…</Button>
                         ) : null}
                       </div>
                     </Cell>
@@ -189,7 +189,7 @@ export function Facilities() {
       {/* ---------------------------------------------------------------- confirm */}
       {confirming ? (
         <Modal title={`Confirm ${confirming.name}`} onClose={() => setConfirming(null)}>
-          <p style={{ color: t.muted, fontSize: 13.5, lineHeight: 1.6, marginTop: 0 }}>
+          <p style={{ color: t.textMuted, fontSize: 13.5, lineHeight: 1.6, marginTop: 0 }}>
             This means one specific thing: <strong style={{ color: t.text }}>you rang them, they exist, and this is the
             number</strong>. Every screen in the app will say a person checked it today, and somebody will drive there
             on the strength of that.
@@ -198,15 +198,15 @@ export function Facilities() {
             <Textarea value={note} onChange={setNote} rows={3} placeholder="Rang the switchboard, spoke to the matron." />
           </Field>
           <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-            <Button variant="primary" onClick={() => act(() => adminApi.confirmFacility(confirming.id, { verified: true, note: note.trim() || null }), 'Confirmed.')}>
+            <Button tone="primary" onClick={() => act(() => adminApi.confirmFacility(confirming.id, { verified: true, note: note.trim() || null }), 'Confirmed.')}>
               I checked it — confirm
             </Button>
             {confirming.verified ? (
-              <Button variant="ghost" onClick={() => act(() => adminApi.confirmFacility(confirming.id, { verified: false, note: note.trim() || null }), 'Confirmation withdrawn.')}>
+              <Button tone="ghost" onClick={() => act(() => adminApi.confirmFacility(confirming.id, { verified: false, note: note.trim() || null }), 'Confirmation withdrawn.')}>
                 Withdraw the confirmation
               </Button>
             ) : null}
-            <Button variant="ghost" onClick={() => setConfirming(null)}>Cancel</Button>
+            <Button tone="ghost" onClick={() => setConfirming(null)}>Cancel</Button>
           </div>
         </Modal>
       ) : null}
@@ -214,19 +214,19 @@ export function Facilities() {
       {/* ---------------------------------------------------------------- a claim */}
       {claiming ? (
         <Modal title={`Claim on ${claiming.name}`} onClose={() => setClaiming(null)}>
-          <p style={{ color: t.muted, fontSize: 13.5, lineHeight: 1.6, marginTop: 0 }}>
+          <p style={{ color: t.textMuted, fontSize: 13.5, lineHeight: 1.6, marginTop: 0 }}>
             <strong style={{ color: t.text }}>{claiming.claimedByName}</strong> ({claiming.claimedByEmail}) says they work
             there, and asked to keep the hours and services current. Approving lets them answer messages sent to the
             place. It never lets them change the name, the ownership or the location.
           </p>
-          {claiming.sourceNote ? <p style={{ color: t.muted2, fontSize: 12.5 }}>{claiming.sourceNote}</p> : null}
+          {claiming.sourceNote ? <p style={{ color: t.textSubtle, fontSize: 12.5 }}>{claiming.sourceNote}</p> : null}
           <Field label="Note">
             <Textarea value={note} onChange={setNote} rows={2} placeholder="Spoke to the pharmacy, she is the superintendent." />
           </Field>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <Button variant="primary" onClick={() => act(() => adminApi.answerFacilityClaim(claiming.id, { approve: true, note: note.trim() || null }), 'Approved.')}>Approve</Button>
-            <Button variant="danger" onClick={() => act(() => adminApi.answerFacilityClaim(claiming.id, { approve: false, note: note.trim() || null }), 'Refused — the entry is free again.')}>Refuse</Button>
-            <Button variant="ghost" onClick={() => setClaiming(null)}>Cancel</Button>
+            <Button tone="primary" onClick={() => act(() => adminApi.answerFacilityClaim(claiming.id, { approve: true, note: note.trim() || null }), 'Approved.')}>Approve</Button>
+            <Button tone="danger" onClick={() => act(() => adminApi.answerFacilityClaim(claiming.id, { approve: false, note: note.trim() || null }), 'Refused — the entry is free again.')}>Refuse</Button>
+            <Button tone="ghost" onClick={() => setClaiming(null)}>Cancel</Button>
           </div>
         </Modal>
       ) : null}
@@ -235,17 +235,17 @@ export function Facilities() {
       {resolving ? (
         <Modal title={resolving.kindLabel} onClose={() => setResolving(null)}>
           <p style={{ color: t.text, fontSize: 14, lineHeight: 1.6, marginTop: 0 }}>“{resolving.what}”</p>
-          <p style={{ color: t.muted2, fontSize: 12.5 }}>
+          <p style={{ color: t.textSubtle, fontSize: 12.5 }}>
             {resolving.facilityName} · {resolving.reportedByName ?? 'Anonymous'} · {fmtDate(resolving.reportedAt)}
           </p>
           <Field label="What did you do?" hint="Required either way — a decision with no note is one nobody can review later, including you.">
             <Textarea value={note} onChange={setNote} rows={3} placeholder="Rang them; they have moved to Wilberforce. Marked closed and added the new entry." />
           </Field>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <Button variant="primary" onClick={() => act(() => adminApi.resolveFacilityReport(resolving.id, { acted: true, note: note.trim() }), 'Closed.')}>
+            <Button tone="primary" onClick={() => act(() => adminApi.resolveFacilityReport(resolving.id, { acted: true, note: note.trim() }), 'Closed.')}>
               I changed the entry
             </Button>
-            <Button variant="ghost" onClick={() => act(() => adminApi.resolveFacilityReport(resolving.id, { acted: false, note: note.trim() }), 'Closed.')}>
+            <Button tone="ghost" onClick={() => act(() => adminApi.resolveFacilityReport(resolving.id, { acted: false, note: note.trim() }), 'Closed.')}>
               Nothing needed doing
             </Button>
           </div>
@@ -257,14 +257,14 @@ export function Facilities() {
   );
 }
 
-function Count({ label, value, hint, tone }: { label: string; value: number; hint: string; tone: 'neutral' | 'warn' | 'bad' }) {
+function Count({ label, value, hint, tone }: { label: string; value: number; hint: string; tone: 'neutral' | 'warning' | 'danger' }) {
   const { t } = useTheme();
-  const colour = tone === 'bad' ? t.danger : tone === 'warn' ? t.warn : t.muted;
+  const colour = tone === 'danger' ? t.danger : tone === 'warning' ? t.warning : t.textMuted;
   return (
-    <div style={{ border: `1px solid ${t.line}`, borderRadius: 12, padding: '10px 14px', minWidth: 130 }}>
+    <div style={{ border: `1px solid ${t.border}`, borderRadius: 12, padding: '10px 14px', minWidth: 130 }}>
       <div style={{ color: colour, fontSize: 22, fontWeight: 800 }}>{value}</div>
       <div style={{ color: t.text, fontSize: 12.5, fontWeight: 700 }}>{label}</div>
-      <div style={{ color: t.muted2, fontSize: 11 }}>{hint}</div>
+      <div style={{ color: t.textSubtle, fontSize: 11 }}>{hint}</div>
     </div>
   );
 }
@@ -284,14 +284,14 @@ function Reports({ reports, onResolve }: { reports: AdminFacilityReport[] | null
               <div style={{ fontWeight: 700, color: report.kind === 'Closed' || report.kind === 'NotReal' ? t.danger : t.text }}>
                 {report.kindLabel}
               </div>
-              <div style={{ fontSize: 12.5, color: t.muted, marginTop: 2 }}>{report.what}</div>
+              <div style={{ fontSize: 12.5, color: t.textMuted, marginTop: 2 }}>{report.what}</div>
             </Cell>
             <Cell>{report.facilityName}</Cell>
             {/* Anonymous is the norm: the person at the locked gate had no account, and
                 demanding one would have lost the report. */}
-            <Cell>{report.reportedByName ?? <span style={{ color: t.muted2 }}>Anonymous</span>}</Cell>
+            <Cell>{report.reportedByName ?? <span style={{ color: t.textSubtle }}>Anonymous</span>}</Cell>
             <Cell>{fmtDate(report.reportedAt)}</Cell>
-            <Cell><Button variant="primary" onClick={() => onResolve(report)}>Deal with it</Button></Cell>
+            <Cell><Button tone="primary" onClick={() => onResolve(report)}>Deal with it</Button></Cell>
           </Row>
         ))}
       </Table>
@@ -331,7 +331,7 @@ function Import({ onDone }: { onDone: () => void }) {
   return (
     <>
       <Card>
-        <p style={{ color: t.muted, fontSize: 13.5, lineHeight: 1.6, marginTop: 0 }}>
+        <p style={{ color: t.textMuted, fontSize: 13.5, lineHeight: 1.6, marginTop: 0 }}>
           Paste a list of places as JSON — the Ministry's facility list, a district register, a survey. Everything
           arrives as a <strong style={{ color: t.text }}>draft</strong>, invisible to the public until somebody
           publishes it, and nothing arrives confirmed: a list is not a person ringing a hospital, and the whole
@@ -347,11 +347,11 @@ function Import({ onDone }: { onDone: () => void }) {
           <Textarea value={json} onChange={setJson} rows={10} placeholder="[ … ]" />
         </Field>
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <Button variant="primary" onClick={() => void run(true)} disabled={busy || !source.trim() || !json.trim()}>
+          <Button tone="primary" onClick={() => void run(true)} disabled={busy || !source.trim() || !json.trim()}>
             Try it (writes nothing)
           </Button>
           <Button
-            variant="danger"
+            tone="danger"
             onClick={() => void run(false)}
             disabled={busy || !source.trim() || !json.trim() || !result?.dryRun}
           >
@@ -359,7 +359,7 @@ function Import({ onDone }: { onDone: () => void }) {
           </Button>
         </div>
         {!result?.dryRun ? (
-          <p style={{ color: t.muted2, fontSize: 12, marginBottom: 0 }}>Try it first — an import of two thousand rows on a typo is very hard to undo.</p>
+          <p style={{ color: t.textSubtle, fontSize: 12, marginBottom: 0 }}>Try it first — an import of two thousand rows on a typo is very hard to undo.</p>
         ) : null}
       </Card>
 
@@ -370,11 +370,11 @@ function Import({ onDone }: { onDone: () => void }) {
           </div>
           <div style={{ maxHeight: 280, overflowY: 'auto', display: 'grid', gap: 3 }}>
             {result.notes.map((line, index) => (
-              <div key={`${line}-${index}`} style={{ color: t.muted, fontSize: 12.5 }}>· {line}</div>
+              <div key={`${line}-${index}`} style={{ color: t.textMuted, fontSize: 12.5 }}>· {line}</div>
             ))}
           </div>
-          <div style={{ borderTop: `1px solid ${t.line}`, marginTop: 10, paddingTop: 10, display: 'grid', gap: 3 }}>
-            {result.rules.map(rule => <div key={rule} style={{ color: t.muted2, fontSize: 11.5, lineHeight: 1.5 }}>· {rule}</div>)}
+          <div style={{ borderTop: `1px solid ${t.border}`, marginTop: 10, paddingTop: 10, display: 'grid', gap: 3 }}>
+            {result.rules.map(rule => <div key={rule} style={{ color: t.textSubtle, fontSize: 11.5, lineHeight: 1.5 }}>· {rule}</div>)}
           </div>
         </Card>
       ) : null}
