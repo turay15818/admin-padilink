@@ -866,6 +866,100 @@ export type SkillPage = {
 /* ---------- Vacancy Health: medical credentials ---------- */
 
 /** The demo directory's ledger: how many stage actors are live, and what a seed or wipe just did. */
+// ---- Places, and the people who go and stand at the gate ----
+//
+// Two halves of one idea. Places stopped being a constant in a source file so that Bo can gain
+// Kandeh Town from this desk; surveyor codes are how the directory gets filled by people who
+// walked to the building, rather than by importing a spreadsheet nobody has ever checked.
+
+export type AdminPlace = {
+  /** Permanent. Requests and saved links carry it, so a rename never changes it. */
+  slug: string;
+  id: string;
+  name: string;
+  /** Province · District · Town · Section */
+  kind: string;
+  /** "Kandeh Town, Bo, Southern Province" — the whole path, written by the server. */
+  path: string;
+  townName: string | null;
+  regionName: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** False where nobody has stood there yet: it lists, but nothing can be measured from it. */
+  hasPin: boolean;
+  active: boolean;
+  parentSlug: string | null;
+  children: number;
+};
+
+export type AdminPlaceTree = {
+  places: AdminPlace[];
+  /** Only what a person would pick to say where they are: towns and sections. */
+  pickable: AdminPlace[];
+};
+
+export type AdminSurveyorCode = {
+  id: string;
+  code: string;
+  holderName: string;
+  holderPhone: string | null;
+  status: string;
+  used: number;
+  max: number;
+  remaining: number;
+  expiresAt: string;
+  expired: boolean;
+  areaName: string | null;
+  note: string | null;
+  lastUsedAt: string | null;
+  issuedAt: string;
+  issuedByName: string | null;
+  /** How many of this code's submissions were accepted. The quality signal, not the count. */
+  approved: number;
+  rejected: number;
+};
+
+export type AdminRegistration = {
+  id: string;
+  name: string;
+  alsoKnownAs: string | null;
+  kind: string;
+  ownership: string;
+  level: string;
+  placePath: string | null;
+  address: string | null;
+  phone: string | null;
+  emergencyPhone: string | null;
+  ambulancePhone: string | null;
+  openingHours: string | null;
+  open24Hours: boolean;
+  hasEmergency: boolean;
+  freeCareForMothersAndUnder5s: boolean;
+  beds: number | null;
+  services: string[];
+  spokeTo: string | null;
+  note: string | null;
+  photoUrl: string | null;
+
+  latitude: number;
+  longitude: number;
+  accuracyMetres: number | null;
+  /** "Within 12 m", "no accuracy reported". Written by the server, never composed here. */
+  accuracyLabel: string;
+  capturedAt: string;
+  minutesOnForm: number | null;
+  /** Anything to look at twice, in plain words. Empty is the good case. */
+  concerns: string[];
+
+  status: string;
+  surveyorCode: string;
+  surveyorName: string;
+  submittedAt: string;
+  possibleDuplicateName: string | null;
+  possibleDuplicateFacilityId: string | null;
+  reviewNote: string | null;
+};
+
 /** One facility as the desk sees it — everything a person needs to decide. */
 export type AdminFacilityRow = {
   id: string;
@@ -2496,5 +2590,48 @@ export const adminApi = {
 
   resolveFacilityReport(reportId: string, body: { acted: boolean; note: string }) {
     return apiRequest<string>(`${BASE}/facilities/reports/${id(reportId)}/resolve`, { method: 'POST', body });
+  },
+
+  // ---- Places, and the people who register them ----
+
+  places(includeInactive = true) {
+    return apiRequest<AdminPlaceTree>(`${BASE}/places?includeInactive=${includeInactive}`);
+  },
+
+  /** Add a town or a section. The slug it is given is permanent. */
+  addPlace(body: { name: string; kind: string; parentSlug?: string | null; latitude?: number | null; longitude?: number | null; sort?: number }) {
+    return apiRequest<AdminPlace>(`${BASE}/places`, { method: 'POST', body });
+  },
+
+  /** Rename, pin, reorder, or switch off. Switching off is not deleting: the rows keep resolving. */
+  editPlace(slug: string, body: { name?: string | null; latitude?: number | null; longitude?: number | null; active?: boolean | null; sort?: number | null }) {
+    return apiRequest<AdminPlace>(`${BASE}/places/${encodeURIComponent(slug)}`, { method: 'PUT', body });
+  },
+
+  surveyorCodes(activeOnly = false) {
+    return apiRequest<AdminSurveyorCode[]>(`${BASE}/surveyor-codes?activeOnly=${activeOnly}`);
+  },
+
+  /** Issue a code to a named person, with a budget and an expiry. */
+  issueSurveyorCode(body: { holderName: string; holderPhone?: string | null; maxRegistrations: number; daysValid: number; areaSlug?: string | null; note?: string | null }) {
+    return apiRequest<AdminSurveyorCode>(`${BASE}/surveyor-codes`, { method: 'POST', body });
+  },
+
+  /** Stop a code. What it already sent stays, and stays traceable to whoever held it. */
+  suspendSurveyorCode(codeId: string, body: { suspend: boolean; reason?: string | null }) {
+    return apiRequest<AdminSurveyorCode>(`${BASE}/surveyor-codes/${id(codeId)}/suspend`, { method: 'POST', body });
+  },
+
+  facilityRegistrations(params: { waitingOnly?: boolean; codeId?: string | null; take?: number } = {}) {
+    const query = new URLSearchParams();
+    query.set('waitingOnly', String(params.waitingOnly ?? true));
+    if (params.codeId) query.set('codeId', params.codeId);
+    query.set('take', String(params.take ?? 50));
+    return apiRequest<AdminRegistration[]>(`${BASE}/facility-registrations?${query.toString()}`);
+  },
+
+  /** Accept it into the directory, fold it into an entry we have, or turn it down. */
+  decideRegistration(registrationId: string, body: { approve: boolean; note: string; mergeIntoFacilityId?: string | null; publish?: boolean }) {
+    return apiRequest<string>(`${BASE}/facility-registrations/${id(registrationId)}/decide`, { method: 'POST', body });
   },
 };

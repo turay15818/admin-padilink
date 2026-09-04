@@ -101,6 +101,9 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/medical', label: 'Medical verification', icon: 'certificate' },
       // The same job as the licence desk above, on places rather than people.
       { to: '/facilities', label: 'Health facilities', icon: 'certificate' },
+      // Where those places come from: codes issued to people who walk to the gate, and the
+      // town-and-section tree they pick from when they get there.
+      { to: '/field', label: 'Field work', icon: 'certificate' },
     ],
   },
   {
