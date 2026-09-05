@@ -1776,6 +1776,55 @@ export type VouchCase = {
   documentUrl?: string | null;
 };
 
+/* ---------------- testimonials: where the best ones get chosen ---------------- */
+
+/**
+ * One submission in the queue.
+ *
+ * NOT a review. A review is left for the next customer, about one provider, and belongs on that
+ * provider's page whatever it says. This is written about Vacancy, offered on purpose, and
+ * reaches the homepage only because somebody on this screen chose it.
+ */
+export type AdminTestimonial = {
+  id: string;
+  quote: string;
+  headline: string | null;
+  rating: number;
+  voiceLabel: string;
+  town: string | null;
+  occupation: string | null;
+  status: 'Submitted' | 'Published' | 'Declined';
+  featured: boolean;
+  sort: number;
+  mayShowPublicly: boolean;
+  mayShowName: boolean;
+  mayShowPhoto: boolean;
+  /** Exactly what the homepage would print, given what the writer agreed to. */
+  publicName: string;
+  publicAttribution: string;
+  publicPhotoPath: string | null;
+  live: boolean;
+  /** The account behind it, so an empty one is visible at a glance. */
+  authorName: string;
+  completedBookings: number;
+  authorJoinedAt: string;
+  submittedAt: string;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  /** Internal. Never shown to the writer. */
+  moderationNote: string | null;
+};
+
+export type AdminTestimonialPage = {
+  items: AdminTestimonial[];
+  total: number;
+  pageIndex: number;
+  pageSize: number;
+  /** The backlog, counted over everything rather than the filtered page. */
+  waiting: number;
+};
+
+
 export const adminApi = {
   // ---- who is bringing people in ----
   ambassadors() {
@@ -2045,6 +2094,19 @@ export const adminApi = {
   },
   decideVouch(vouchId: string, body: { approve: boolean; note?: string | null }) {
     return apiRequest<VouchCase>(`/api/v1/secure/vouch-review/${id(vouchId)}/decide`, { method: 'POST', body });
+  },
+  // ---- testimonials: what people say about us, and which of it we show ----
+  testimonials(params: { status?: string; search?: string; featuredOnly?: boolean; pageIndex?: number; pageSize?: number } = {}) {
+    const query = new URLSearchParams();
+    if (params.status) query.set('status', params.status);
+    if (params.search) query.set('search', params.search);
+    if (params.featuredOnly) query.set('featuredOnly', 'true');
+    query.set('pageIndex', String(params.pageIndex ?? 1));
+    query.set('pageSize', String(params.pageSize ?? 25));
+    return apiRequest<AdminTestimonialPage>(`/api/v1/secure/admin/testimonials?${query}`);
+  },
+  moderateTestimonial(testimonialId: string, body: { action: 'publish' | 'decline' | 'feature' | 'unfeature'; note?: string | null; sort?: number | null }) {
+    return apiRequest<AdminTestimonial>(`/api/v1/secure/admin/testimonials/${id(testimonialId)}/moderate`, { method: 'POST', body });
   },
   // ---- identity: the cases a machine would not decide alone ----
   identityQueue() {

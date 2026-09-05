@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { Shell } from './Shell';
 import { SignIn } from '../pages/SignIn';
+import { Testimonials } from '../pages/Testimonials';
 import { Overview } from '../pages/Overview';
 import { People, Person } from '../pages/People';
 import { Growth } from '../pages/Growth';
@@ -111,6 +112,7 @@ export function App() {
           <Route path="/ambassadors" element={<Ambassadors />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/content" element={<Content identity={identity} />} />
+          <Route path="/testimonials" element={<Testimonials />} />
           <Route path="/learn" element={<Learn identity={identity} />} />
           <Route path="/notifications" element={<NotificationEnginePage />} />
           <Route path="/broadcasts" element={<Broadcasts identity={identity} />} />

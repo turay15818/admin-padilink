@@ -94,6 +94,9 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/catalog', label: 'Services', icon: 'services' },
       { to: '/bookings', label: 'Bookings', icon: 'booking' },
       { to: '/content', label: 'Posted content', icon: 'content' },
+      // Under Marketplace beside posted content, not under Reach: these are things
+      // people wrote, which we choose among — not things we placed.
+      { to: '/testimonials', label: 'What people say', icon: 'speech' },
       { to: '/learn', label: 'Learn', icon: 'training' },
       { to: '/documents', label: 'Documents', icon: 'certificate' },
       { to: '/identity', label: 'Identity', icon: 'certificate' },
