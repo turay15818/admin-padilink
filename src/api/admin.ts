@@ -4,6 +4,7 @@ import { securePost, type AdminDevice } from './secure';
 
 const BASE = '/api/v1/secure/admin/console';
 const DASHBOARD = '/api/v1/secure/admin/dashboard';
+const SKILLS_MAP = '/api/v1/secure/admin/skills-map';
 const ADVERTS = '/api/v1/secure/admin/adverts';
 const AUTH = '/api/v1/admin/session';
 const CONTACT = '/api/v1/secure/admin/contact-messages';
@@ -711,6 +712,10 @@ export type EngineFunnel = {
   written: number; pushed: number; opened: number;
   muted: number; skipped: number; failed: number; pending: number;
   pushRatePercent: number | null; openRatePercent: number | null;
+  /** For the record, waiting for the person's daily digest. Their choice, and the default — not a fault. Absent from an API one deploy behind. */
+  held?: number;
+  /** For the record, already sent once in a daily digest. */
+  digested?: number;
 };
 
 export type EngineDay = { day: string; written: number; pushed: number; opened: number; failed: number };
@@ -838,6 +843,29 @@ export type AdminCategory = {
 };
 
 /** 2 active · 3 suspended · 4 blocked — matches AccountStatus on the server. */
+/**
+ * How complete the national skills map is.
+ *
+ * Most providers give a town, not a coordinate, so the map places them on their district's anchor
+ * — which depends on their district being worked out from whatever they typed. That resolution
+ * improves over time, and nothing tells anybody so. Hence a button.
+ *
+ * `unplaced` is the number that matters. It is not a maintenance chore, it is a measurement of
+ * how good the sign-up form is, and it says which towns to add to the places table next.
+ */
+export type AtlasStampReport = {
+  profiles: number;
+  /** Stamped with the provider's own coordinate. */
+  exact: number;
+  /** Stamped with their district's anchor, because they gave no coordinate. */
+  byDistrict: number;
+  /** Nothing on the profile says where they are. Reported, never guessed. */
+  unplaced: number;
+  /** How many rows the run would change. Zero means the map is already up to date. */
+  changed: number;
+  ranAt: string;
+};
+
 export const AccountStatus = { Active: 2, Suspended: 3, Blocked: 4 } as const;
 
 /* ---------- paged catalogue ---------- */
@@ -990,9 +1018,18 @@ export type AdminFacilityRow = {
   serviceCount: number;
   openReports: number;
   claimPending: boolean;
+  /** None · Pending · Approved · Refused. */
+  claimStatus: string;
   claimedByName?: string | null;
   claimedByEmail?: string | null;
   claimedAt?: string | null;
+  /** What they said they do there, in their words — the whole basis of the decision. */
+  claimRole?: string | null;
+  /** Anything else they wrote. */
+  claimNote?: string | null;
+  claimAnsweredAt?: string | null;
+  /** What was said back to them. Never printed to the public. */
+  claimAnswerNote?: string | null;
 };
 
 export type AdminFacilityList = {
@@ -2695,5 +2732,16 @@ export const adminApi = {
   /** Accept it into the directory, fold it into an entry we have, or turn it down. */
   decideRegistration(registrationId: string, body: { approve: boolean; note: string; mergeIntoFacilityId?: string | null; publish?: boolean }) {
     return apiRequest<string>(`${BASE}/facility-registrations/${id(registrationId)}/decide`, { method: 'POST', body });
+  },
+
+  // ---- keeping the national skills map drawable ----
+
+  /** How complete the map is. Reads; writes nothing. */
+  atlasCoverage() {
+    return apiRequest<AtlasStampReport>(`${SKILLS_MAP}/coverage`);
+  },
+  /** Re-resolve every provider's district and stamp their map pin. Idempotent. */
+  atlasRestamp() {
+    return apiRequest<AtlasStampReport>(`${SKILLS_MAP}/restamp`, { method: 'POST' });
   },
 };

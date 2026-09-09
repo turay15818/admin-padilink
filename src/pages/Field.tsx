@@ -40,9 +40,10 @@ import {
   type AdminPlaceTree,
   type AdminRegistration,
   type AdminSurveyorCode,
+  type AtlasStampReport,
 } from '../api/admin';
 
-type Tab = 'queue' | 'codes' | 'places';
+type Tab = 'queue' | 'codes' | 'places' | 'map';
 
 
 export function Field() {
@@ -126,6 +127,10 @@ export function Field() {
         </Button>
         <Button tone={tab === 'codes' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('codes')}>Codes</Button>
         <Button tone={tab === 'places' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('places')}>Places</Button>
+        {/* On this page rather than its own, because it is the same job. Somebody who has just
+            added Kandeh Town to the tree above is standing exactly where they would want to
+            press this — every provider who wrote "Kandeh Town" has been unplaceable until now. */}
+        <Button tone={tab === 'map' ? 'primary' : 'ghost'} size="sm" onClick={() => setTab('map')}>National map</Button>
       </div>
 
       {error ? <ErrorNote message={error} /> : null}
@@ -147,6 +152,8 @@ export function Field() {
       {!busy && tab === 'places' ? (
         <Places tree={tree} onAdd={() => setAdding(true)} onEdit={setEditing} />
       ) : null}
+
+      {!busy && tab === 'map' ? <MapCoverage onToast={push} /> : null}
 
       {deciding ? (
         <DecideModal
@@ -860,5 +867,127 @@ function EditPlaceModal({
         </Button>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * How complete the national skills map is, and the one button that makes it more so.
+ *
+ * WHY THIS IS A BUTTON AND NOT A MIGRATION. Most providers give a town, not a coordinate, so the
+ * map draws them on their district's anchor — which depends on their district being worked out
+ * from whatever they typed into a sign-up form. That resolution gets better over time: the day
+ * somebody adds Kandeh Town to the tree on the Places tab, every provider who wrote Kandeh Town
+ * stops being unplaceable. Nothing tells anybody that happened, and a map that silently improves
+ * only when a developer remembers to run something is a map that does not improve.
+ *
+ * THE NUMBER THAT MATTERS IS "not placed". It reads like a maintenance chore and it is not: it is
+ * a measurement of how good the sign-up form is, and it names the work — those are the towns to
+ * add to the tree next. A map with four hundred unplaced providers is not a broken map, it is a
+ * form asking a question people are answering in a way we do not yet understand.
+ *
+ * The preview and the run are the same walk over the same rows by the same rules on the server,
+ * so the figure somebody decides from cannot disagree with what happens when they press it.
+ */
+function MapCoverage({ onToast }: { onToast: (message: string) => void }) {
+  const { t } = useTheme();
+  const [report, setReport] = useState<AtlasStampReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const read = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setReport(await adminApi.atlasCoverage());
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The coverage could not be read.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void read(); }, [read]);
+
+  const run = async () => {
+    setRunning(true);
+    setError(null);
+    try {
+      const done = await adminApi.atlasRestamp();
+      setReport(done);
+      onToast(done.changed === 0
+        ? 'Nothing to change — the map was already up to date.'
+        : `Restamped ${done.changed.toLocaleString()} ${done.changed === 1 ? 'profile' : 'profiles'}.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The restamp did not run.');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  if (loading) return <Loading label="Counting who is on the map…" />;
+
+  const placed = report ? report.exact + report.byDistrict : 0;
+  const share = report && report.profiles > 0 ? Math.round((placed / report.profiles) * 1000) / 10 : 0;
+
+  return (
+    <div style={{ display: 'grid', gap: 13 }}>
+      {error ? <ErrorNote message={error} /> : null}
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <Count label="Providers" value={report?.profiles ?? 0} tone="neutral" />
+        <Count label="On their own pin" value={report?.exact ?? 0} tone="success" state="clear" />
+        <Count label="On their district" value={report?.byDistrict ?? 0} tone="info" />
+        <Count
+          label="Not placed"
+          value={report?.unplaced ?? 0}
+          tone={report?.unplaced ? 'warning' : 'success'}
+          state={report?.unplaced ? 'look' : 'clear'}
+        />
+      </div>
+
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 800, color: t.text, marginBottom: 5 }}>
+          {share}% of providers can be drawn on the national map
+        </div>
+        <div style={{ fontSize: 12.5, color: t.textMuted, lineHeight: 1.65 }}>
+          A provider with their own coordinate is drawn where they are. One without is drawn on
+          their district's main town, and the map shows that pin hollow so nobody is sent to the
+          wrong street. A provider we cannot place at all named only a province, or a town that is
+          not in the tree on the Places tab — <b style={{ color: t.text }}>those are the towns to add next</b>.
+        </div>
+      </Card>
+
+      {report && report.unplaced > 0 ? (
+        <Card>
+          <div style={{ fontSize: 13, fontWeight: 800, color: t.text, marginBottom: 5 }}>
+            {report.unplaced.toLocaleString()} {report.unplaced === 1 ? 'provider is' : 'providers are'} counted nationally and drawn nowhere
+          </div>
+          <div style={{ fontSize: 12.5, color: t.textMuted, lineHeight: 1.65 }}>
+            They are reported rather than dropped, and never placed at a guess: a map that quietly
+            loses people reports a smaller country than the one it has, and one that invents a
+            district for them reports a false one. Add the town they named on the Places tab, then
+            run the restamp.
+          </div>
+        </Card>
+      ) : null}
+
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Button tone="primary" onClick={() => void run()} disabled={running}>
+          {running ? 'Restamping…' : report?.changed ? `Restamp ${report.changed.toLocaleString()} profiles` : 'Restamp the map'}
+        </Button>
+        <Button tone="ghost" size="sm" onClick={() => void read()} disabled={running}>Check again</Button>
+        <span style={{ fontSize: 12, color: t.textMuted }}>
+          {report?.changed
+            ? `${report.changed.toLocaleString()} ${report.changed === 1 ? 'row' : 'rows'} would change.`
+            : 'Nothing would change — the map is up to date.'}
+          {' '}Never touches the coordinates a provider gave.
+        </span>
+      </div>
+
+      {report ? (
+        <div style={{ fontSize: 11.5, color: t.textMuted }}>Counted {fmtDateTime(report.ranAt)}.</div>
+      ) : null}
+    </div>
   );
 }

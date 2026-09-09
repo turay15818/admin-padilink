@@ -92,8 +92,18 @@ export function NotificationEnginePage() {
             label="Reached a phone"
             value={funnel.pushed}
             tone={t.success}
-            note={funnel.pushRatePercent === null ? 'Nothing to divide by yet.' : `${funnel.pushRatePercent}% of everything raised.`}
+            note={funnel.pushRatePercent === null ? 'Nothing to divide by yet.' : `${funnel.pushRatePercent}% of what was meant to buzz on its own.`}
           />
+          {/* Needs-you goes as it happens; the rest waits for one daily message. Those rows are
+              written and never pushed on their own, and this is why — so nobody reads a quiet,
+              healthy week as a delivery problem. Absent from an API one deploy behind. */}
+          {funnel.held !== undefined || funnel.digested !== undefined ? (
+            <Stat
+              label="In the daily digest"
+              value={(funnel.held ?? 0) + (funnel.digested ?? 0)}
+              note={`${funnel.held ?? 0} waiting for tonight's, ${funnel.digested ?? 0} already sent in one. For the record, by design.`}
+            />
+          ) : null}
           <Stat label="Muted by the person" value={funnel.muted} note="They turned this kind off. Not a fault." />
           <Stat
             label="Nowhere to send it"

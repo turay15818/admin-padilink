@@ -95,7 +95,9 @@ export function Facilities() {
           <Count label="Drafts" value={data.drafts} hint="Not public yet" tone={data.drafts ? 'warning' : 'neutral'} />
           <Count label="Never checked" value={data.unverified} hint="Live, but nobody has rung them" tone={data.unverified ? 'warning' : 'neutral'} />
           <Count label="Stale" value={data.stale} hint="Checked over six months ago" tone={data.stale ? 'warning' : 'neutral'} />
-          <Count label="Claims waiting" value={data.pendingClaims} hint="Somebody says they work there" tone={data.pendingClaims ? 'warning' : 'neutral'} />
+          {/* Not a housekeeping number. Until each of these is answered, a real pharmacy is
+              being sent nothing and cannot tell that apart from being ignored. */}
+          <Count label="Claims waiting" value={data.pendingClaims} hint="A pharmacy is getting nothing until you answer" tone={data.pendingClaims ? 'warning' : 'neutral'} />
           <Count label="Reports" value={data.openReports} hint="Somebody went there and told us" tone={data.openReports ? 'danger' : 'neutral'} />
         </div>
       ) : null}
@@ -156,7 +158,8 @@ export function Facilities() {
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {row.status === 'Draft' ? <Pill tone="warning">Draft</Pill> : null}
                         {row.status === 'Closed' ? <Pill tone="danger">Closed</Pill> : null}
-                        {row.claimPending ? <Pill tone="warning">Claim</Pill> : null}
+                        {row.claimPending ? <Pill tone="warning">Claim waiting</Pill> : null}
+                        {row.claimStatus === 'Approved' ? <Pill tone="success">Claimed</Pill> : null}
                         {row.openReports ? <Pill tone="danger">{row.openReports} report{row.openReports === 1 ? '' : 's'}</Pill> : null}
                         {row.verified ? <Pill tone="success">Confirmed</Pill> : null}
                       </div>
@@ -171,6 +174,9 @@ export function Facilities() {
                           <Button tone="ghost" onClick={() => act(() => adminApi.setFacilityStatus(row.id, { status: 'Closed' }), 'Marked closed.')}>Closed</Button>
                         ) : null}
                         {row.claimPending ? (
+                          <Button tone="primary" onClick={() => { setNote(''); setClaiming(row); }}>Answer the claim</Button>
+                        ) : null}
+                        {row.claimStatus === 'Approved' ? (
                           <Button tone="ghost" onClick={() => { setNote(''); setClaiming(row); }}>Claim…</Button>
                         ) : null}
                       </div>
@@ -215,17 +221,43 @@ export function Facilities() {
       {claiming ? (
         <Modal title={`Claim on ${claiming.name}`} onClose={() => setClaiming(null)}>
           <p style={{ color: t.textMuted, fontSize: 13.5, lineHeight: 1.6, marginTop: 0 }}>
-            <strong style={{ color: t.text }}>{claiming.claimedByName}</strong> ({claiming.claimedByEmail}) says they work
-            there, and asked to keep the hours and services current. Approving lets them answer messages sent to the
-            place. It never lets them change the name, the ownership or the location.
+            <strong style={{ color: t.text }}>{claiming.claimedByName}</strong> ({claiming.claimedByEmail}) asked to look
+            after this entry{claiming.claimedAt ? ` on ${fmtDate(claiming.claimedAt)}` : ''}.
           </p>
-          {claiming.sourceNote ? <p style={{ color: t.textSubtle, fontSize: 12.5 }}>{claiming.sourceNote}</p> : null}
-          <Field label="Note">
-            <Textarea value={note} onChange={setNote} rows={2} placeholder="Spoke to the pharmacy, she is the superintendent." />
+
+          {/* What they wrote, quoted. It is the entire basis of this decision, and it used to
+              be buried in SourceNote — the directory's own provenance field, printed to the
+              public — where a claim's text did not belong and a reviewer had to guess at it. */}
+          {claiming.claimRole ? (
+            <div style={{ border: `1px solid ${t.border}`, borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.06em', color: t.textSubtle }}>THEY SAY THEY ARE</div>
+              <div style={{ fontSize: 14, color: t.text, fontWeight: 700, marginTop: 3 }}>{claiming.claimRole}</div>
+              {claiming.claimNote ? (
+                <div style={{ fontSize: 13, color: t.textMuted, marginTop: 6, lineHeight: 1.55 }}>“{claiming.claimNote}”</div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Approving is not a tidying-up action. It is the moment a stranger starts receiving
+              real people's prescriptions, and the reviewer should read that before clicking. */}
+          <p style={{ color: t.textMuted, fontSize: 13.5, lineHeight: 1.6 }}>
+            Approving sends this account <strong style={{ color: t.text }}>prescriptions from patients near this
+            place</strong>, and lets them answer messages written to it and keep its hours and services current. It never
+            lets them change the name, the ownership or the location. {claiming.phone ? `Ring ${claiming.phone} and ask for them.` : 'There is no number on this entry to check against.'}
+          </p>
+
+          <Field label="Note" hint="Sent to them. A refusal with no reason reads as a silence.">
+            <Textarea value={note} onChange={setNote} rows={2} placeholder="Rang the pharmacy, she is the superintendent." />
           </Field>
-          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <Button tone="primary" onClick={() => act(() => adminApi.answerFacilityClaim(claiming.id, { approve: true, note: note.trim() || null }), 'Approved.')}>Approve</Button>
-            <Button tone="danger" onClick={() => act(() => adminApi.answerFacilityClaim(claiming.id, { approve: false, note: note.trim() || null }), 'Refused — the entry is free again.')}>Refuse</Button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            {claiming.claimStatus === 'Approved' ? (
+              <Button tone="danger" onClick={() => act(() => adminApi.answerFacilityClaim(claiming.id, { approve: false, note: note.trim() || null }), 'Taken back — the entry is free again.')}>Take it back</Button>
+            ) : (
+              <>
+                <Button tone="primary" onClick={() => act(() => adminApi.answerFacilityClaim(claiming.id, { approve: true, note: note.trim() || null }), 'Approved — they have been told.')}>Approve</Button>
+                <Button tone="danger" onClick={() => act(() => adminApi.answerFacilityClaim(claiming.id, { approve: false, note: note.trim() || null }), 'Refused — they have been told, and the entry is free again.')}>Refuse</Button>
+              </>
+            )}
             <Button tone="ghost" onClick={() => setClaiming(null)}>Cancel</Button>
           </div>
         </Modal>
