@@ -77,9 +77,14 @@ export function Identity() {
                   <Pill tone={row.faceMatched ? 'success' : 'warning'}>
                     {row.faceMatched ? `Face matches (${row.faceConfidence}%)` : `Face unsure (${row.faceConfidence}%)`}
                   </Pill>
-                  {row.documentExpiresAt ? (
-                    <Pill tone="neutral">Expires {new Date(row.documentExpiresAt).toLocaleDateString()}</Pill>
-                  ) : null}
+                  {/*
+                    THE EXPIRY DATE NOW DOES SOMETHING.
+                    A passed check stops counting as proof the day the document behind it runs
+                    out — the badge no longer outlives the paper. So a reviewer approving this
+                    case needs to see how long their yes will actually last, and a date that is
+                    already past means approving it grants nothing at all.
+                  */}
+                  {row.documentExpiresAt ? <ExpiryPill on={row.documentExpiresAt} /> : null}
                 </div>
                 <div style={{ fontSize: 13, color: t.text, marginTop: 10 }}>{row.doubtLabel}</div>
               </div>
@@ -111,4 +116,21 @@ export function Identity() {
       <Toasts toasts={toasts} />
     </>
   );
+}
+
+
+/**
+ * How long a yes on this case would last.
+ *
+ * Neutral while the document has a year or more to run, a warning inside sixty days, and a
+ * refusal once it is past — approving an expired document grants nothing, because the rule that
+ * decides whether somebody is verified reads this date too.
+ */
+function ExpiryPill({ on }: { on: string }) {
+  const when = new Date(on);
+  const days = Math.round((when.getTime() - Date.now()) / 86_400_000);
+  const shown = when.toLocaleDateString();
+  if (days < 0) return <Pill tone="danger">Expired {shown} — approving this grants nothing</Pill>;
+  if (days <= 60) return <Pill tone="warning">Expires {shown} — {days} day{days === 1 ? '' : 's'} left</Pill>;
+  return <Pill tone="neutral">Expires {shown}</Pill>;
 }

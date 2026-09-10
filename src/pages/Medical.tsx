@@ -14,7 +14,16 @@ import {
 import { adminApi, type DemoHealthStatus, type MedicalReviewRow } from '../api/admin';
 import { config } from '../api/client';
 
-const STATUS_LABEL: Record<number, string> = { 1: 'Pending', 2: 'Approved', 3: 'Rejected' };
+const STATUS_LABEL: Record<number, string> = {
+  1: 'Pending', 2: 'Approved', 3: 'Rejected',
+  4: 'Paused', 5: 'Withdrawn', 6: 'Ran out',
+};
+
+/** Approved is the only one that is good news; pending and paused are amber; the rest are not. */
+const STATUS_TONE = (status: number, usable: boolean): 'success' | 'warning' | 'danger' =>
+  status === 2 && usable ? 'success' : status === 1 || status === 4 ? 'warning' : 'danger';
+
+const day = (value: string | null) => (value ? new Date(value).toLocaleDateString() : null);
 
 export function Medical() {
   const { t } = useTheme();
@@ -29,6 +38,10 @@ export function Medical() {
   const [demo, setDemo] = useState<DemoHealthStatus | null>(null);
   const [demoBusy, setDemoBusy] = useState(false);
   const [confirmStrike, setConfirmStrike] = useState(false);
+  // Withdrawing somebody's practice is not a thing that happens on one click in a list.
+  const [changing, setChanging] = useState<{ row: MedicalReviewRow; to: 'Suspended' | 'Revoked' | 'Approved' } | null>(null);
+  const [reason, setReason] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
 
   const load = useCallback(() => {
     setError(null);
@@ -54,13 +67,40 @@ export function Medical() {
       return;
     }
     setDeciding(true);
-    adminApi.decideMedical(reviewing.id, { approve, note: note.trim() || null })
+    adminApi.decideMedical(reviewing.id, {
+      approve,
+      note: note.trim() || null,
+      // Taken now because the reviewer is holding the document at this moment and nobody
+      // will be holding it again.
+      expiresAt: approve && expiresAt ? new Date(`${expiresAt}T00:00:00Z`).toISOString() : null,
+    })
       .then(() => {
         push(approve
           ? 'Approved — they now appear in Vacancy Health.'
           : 'Rejected — the professional has been told what to fix.');
         setReviewing(null);
         setNote('');
+        setExpiresAt('');
+        load();
+      })
+      .catch(caught => push(caught instanceof Error ? caught.message : 'That did not work.', 'error'))
+      .finally(() => setDeciding(false));
+  };
+
+  const applyChange = () => {
+    if (!changing) return;
+    if (reason.trim().length < 5) {
+      push('Say why. Withdrawing a licence closes somebody’s practice and the reason goes on the file.', 'error');
+      return;
+    }
+    setDeciding(true);
+    adminApi.changeMedical(changing.row.id, { status: changing.to, reason: reason.trim() })
+      .then(() => {
+        push(changing.to === 'Approved'
+          ? 'Restored — they appear in Vacancy Health again.'
+          : 'Done. They have been told, and every clinical door is shut behind them.');
+        setChanging(null);
+        setReason('');
         load();
       })
       .catch(caught => push(caught instanceof Error ? caught.message : 'That did not work.', 'error'))
@@ -154,9 +194,17 @@ export function Medical() {
               <div style={{ flex: 1, minWidth: 260 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontWeight: 800, fontSize: 15, color: t.text }}>{row.providerName}</span>
-                  <Pill tone={row.status === 2 ? 'success' : row.status === 3 ? 'danger' : 'warning'}>
-                    {STATUS_LABEL[row.status] ?? 'Unknown'}
+                  <Pill tone={STATUS_TONE(row.status, row.usable)}>
+                    {row.statusLabel ?? STATUS_LABEL[row.status] ?? 'Unknown'}
                   </Pill>
+                  {/*
+                    An approved row whose date has passed but which the nightly sweep has not
+                    reached yet. The clinical gates already refuse it; this makes the desk agree
+                    rather than showing a green badge on a licence that has run out.
+                  */}
+                  {row.status === 2 && !row.usable ? (
+                    <Pill tone="danger">Not usable — date has passed</Pill>
+                  ) : null}
                 </div>
                 <div style={{ color: t.textMuted, fontSize: 13, marginTop: 3 }}>
                   {row.professionLabel}{row.specialtyText ? ` · ${row.specialtyText}` : ''}{row.city ? ` · ${row.city}` : ''}
@@ -168,8 +216,18 @@ export function Medical() {
                   Submitted {new Date(row.submittedAt).toLocaleDateString()}
                   {row.reviewedAt ? ` · decided ${new Date(row.reviewedAt).toLocaleDateString()}${row.reviewedByName ? ` by ${row.reviewedByName}` : ''}` : ''}
                 </div>
+                {row.goodUntil ? (
+                  <div style={{ color: t.textSubtle, fontSize: 12, marginTop: 2 }}>
+                    {row.expiresAt
+                      ? `Registration runs out ${day(row.expiresAt)}`
+                      : `No date on the paper — must be re-read by ${day(row.goodUntil)}`}
+                  </div>
+                ) : null}
                 {row.reviewNote ? (
                   <div style={{ color: t.textMuted, fontSize: 12.5, marginTop: 4 }}>Note: “{row.reviewNote}”</div>
+                ) : null}
+                {row.statusReason ? (
+                  <div style={{ color: t.textMuted, fontSize: 12.5, marginTop: 4 }}>Why: “{row.statusReason}”</div>
                 ) : null}
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -184,7 +242,21 @@ export function Medical() {
                   </a>
                 ) : null}
                 {row.status === 1 ? (
-                  <Button onClick={() => { setReviewing(row); setNote(''); }}>Decide</Button>
+                  <Button onClick={() => { setReviewing(row); setNote(''); setExpiresAt(''); }}>Decide</Button>
+                ) : null}
+                {/*
+                  The lever this desk did not have. Until now approval was one-way: a clinician
+                  struck off by the Council kept the badge, the consultations, the prescribing
+                  and the certificates for as long as the account existed.
+                */}
+                {row.status === 2 ? (
+                  <>
+                    <Button tone="ghost" onClick={() => { setChanging({ row, to: 'Suspended' }); setReason(''); }}>Pause</Button>
+                    <Button tone="danger" onClick={() => { setChanging({ row, to: 'Revoked' }); setReason(''); }}>Withdraw</Button>
+                  </>
+                ) : null}
+                {row.status === 4 || row.status === 5 ? (
+                  <Button tone="ghost" onClick={() => { setChanging({ row, to: 'Approved' }); setReason(''); }}>Restore</Button>
                 ) : null}
               </div>
             </div>
@@ -203,6 +275,25 @@ export function Medical() {
               style={{ color: t.accent, fontWeight: 700, fontSize: 13.5, textDecoration: 'none' }}>
               Open the license document
             </a>
+            {/*
+              Asked for here because this is the only moment anybody is holding the document.
+              Optional, because some papers genuinely carry no date — those fall back to a
+              yearly re-read rather than standing for ever.
+            */}
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span style={{ color: t.textMuted, fontSize: 12.5, fontWeight: 700 }}>
+                When does the registration run out? (leave blank if the paper says nothing)
+              </span>
+              <input
+                type="date"
+                value={expiresAt}
+                onChange={event => setExpiresAt(event.target.value)}
+                style={{
+                  background: t.surface, border: `1px solid ${t.border}`, borderRadius: 8,
+                  color: t.text, fontSize: 14, padding: '9px 11px',
+                }}
+              />
+            </label>
             <Textarea
               placeholder="Note to the professional — required on rejection, optional on approval"
               value={note}
@@ -212,6 +303,39 @@ export function Medical() {
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <Button tone="danger" disabled={deciding} onClick={() => decide(false)}>Reject with note</Button>
               <Button disabled={deciding} onClick={() => decide(true)}>Approve — badge goes live</Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {changing ? (
+        <Modal
+          title={changing.to === 'Approved'
+            ? `Restore ${changing.row.providerName}`
+            : changing.to === 'Suspended'
+              ? `Pause ${changing.row.providerName}`
+              : `Withdraw ${changing.row.providerName}`}
+          onClose={() => setChanging(null)}>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ color: t.textMuted, fontSize: 13.5, lineHeight: 1.6 }}>
+              {changing.to === 'Approved'
+                ? 'They will appear in Vacancy Health again and can consult, prescribe and sign certificates.'
+                : 'They stop appearing in Vacancy Health immediately, and cannot consult, prescribe, refer or sign certificates. Documents they have already issued stay valid — the verify page will say the registration has since been withdrawn, which is the true thing and the useful one.'}
+            </div>
+            <Textarea
+              placeholder="Why. The professional is shown this."
+              value={reason}
+              onChange={setReason}
+              rows={3}
+            />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <Button tone="ghost" disabled={deciding} onClick={() => setChanging(null)}>Cancel</Button>
+              <Button
+                tone={changing.to === 'Approved' ? undefined : 'danger'}
+                disabled={deciding}
+                onClick={applyChange}>
+                {changing.to === 'Approved' ? 'Restore the badge' : changing.to === 'Suspended' ? 'Pause it' : 'Withdraw it'}
+              </Button>
             </div>
           </div>
         </Modal>

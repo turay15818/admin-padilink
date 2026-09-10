@@ -1088,6 +1088,15 @@ export type MedicalReviewRow = {
   reviewedAt: string | null;
   reviewNote: string | null;
   reviewedByName: string | null;
+  /** When the registration on the paper runs out. Null where it carried no date. */
+  expiresAt: string | null;
+  /** When it stops being good — the paper's date, or the yearly re-read for an undated one. */
+  goodUntil: string | null;
+  /** Good RIGHT NOW: status and date together. What every clinical gate actually asks. */
+  usable: boolean;
+  /** Why it was suspended, revoked or expired. */
+  statusReason: string | null;
+  statusLabel: string | null;
 };
 
 /* ---------- uploaded documents ---------- */
@@ -2159,7 +2168,17 @@ export const adminApi = {
     return apiRequest<MedicalReviewRow[]>(`${BASE}/medical-credentials?pendingOnly=${pendingOnly}`);
   },
 
-  decideMedical(credentialId: string, body: { approve: boolean; note?: string | null }) {
+  /**
+   * Withdraw, pause or restore a licence that was already approved.
+   *
+   * The lever the console did not have. Approval used to be one-way — `decideMedical` refuses
+   * anything that is not pending — so a clinician struck off by the Council kept the verified
+   * badge and every clinical power that comes with it.
+   */
+  changeMedical(credentialId: string, body: { status: 'Suspended' | 'Revoked' | 'Approved'; reason: string }) {
+    return apiRequest<MedicalReviewRow>(`${BASE}/medical-credentials/${id(credentialId)}/status`, { method: 'POST', body });
+  },
+  decideMedical(credentialId: string, body: { approve: boolean; note?: string | null; expiresAt?: string | null }) {
     return apiRequest<MedicalReviewRow>(`${BASE}/medical-credentials/${id(credentialId)}/decide`, { method: 'POST', body });
   },
 
