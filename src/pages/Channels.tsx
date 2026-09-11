@@ -43,8 +43,8 @@ export function Channels() {
   return (
     <div>
       <PageHeader
-        title="WhatsApp number"
-        subtitle="What people asked the number, and whether it answered. Counts only — there is nothing else stored."
+        title="The two numbers"
+        subtitle="What people asked WhatsApp and SMS, and whether they answered. Counts only — there is nothing else stored."
         action={
           <div style={{ display: 'flex', gap: 6 }}>
             {WINDOWS.map(window => (
@@ -75,25 +75,32 @@ export function Channels() {
 
       {data ? (
         <div style={{ display: 'grid', gap: 14 }}>
-          {/* The first thing to know, before any number on the page means anything. */}
-          <Card>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <Pill tone={data.configured ? 'success' : 'warning'}>
-                {data.configured ? 'Receiving' : 'Not configured'}
-              </Pill>
-              <span style={{ color: t.text, fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                {data.number ?? 'No number set'}
-              </span>
-              <span style={{ color: t.textMuted, fontSize: 13, lineHeight: 1.5 }}>
-                {data.configured
-                  ? 'Send it a message yourself if you want to check it end to end — "help" is enough.'
-                  : 'The webhook returns 404 and nothing can arrive until the credentials and verify token are set.'}
-              </span>
-            </div>
-          </Card>
+          {/* The first thing to know, before any number on the page means anything. Both doors
+              side by side because they fail separately: Meta switches off a webhook that keeps
+              erroring, and an aggregator stops when an invoice goes unpaid. */}
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+            {(data.channels ?? []).map(channel => (
+              <Card key={channel.key}>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <Pill tone={channel.live ? 'success' : 'warning'}>{channel.live ? 'Live' : 'Off'}</Pill>
+                    <span style={{ color: t.text, fontSize: 14, fontWeight: 800 }}>{channel.label}</span>
+                    <span style={{ color: t.textMuted, fontSize: 13.5, fontVariantNumeric: 'tabular-nums' }}>
+                      {channel.number ?? 'no number set'}
+                    </span>
+                  </div>
+                  <span style={{ color: t.text, fontSize: 20, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                    {channel.asked.toLocaleString()}
+                    <span style={{ color: t.textMuted, fontSize: 12.5, fontWeight: 600 }}> messages</span>
+                  </span>
+                  <span style={{ color: t.textMuted, fontSize: 12.5, lineHeight: 1.55 }}>{channel.note}</span>
+                </div>
+              </Card>
+            ))}
+          </div>
 
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-            <Figure label="Messages" value={data.asked} note={`in the last ${data.hours} hours`} />
+            <Figure label="Both numbers" value={data.asked} note={`messages in the last ${data.hours} hours`} />
             <Figure
               label="Got nothing back"
               value={data.unanswered}
@@ -107,9 +114,9 @@ export function Channels() {
               icon="💬"
               title="Nothing came in"
               message={
-                data.configured
-                  ? 'If this was busy yesterday, check the webhook in the Meta console — a webhook that returns an error long enough gets switched off there, and this is the only place that shows it.'
-                  : 'Nothing can arrive until the number is configured.'
+                (data.channels ?? []).some(channel => channel.live)
+                  ? 'If this was busy yesterday, check the webhook in the Meta console and the aggregator\'s dashboard — a webhook that keeps returning an error gets switched off at the other end, and this is the only place that shows it.'
+                  : 'Nothing can arrive until at least one of the numbers is configured.'
               }
             />
           ) : (

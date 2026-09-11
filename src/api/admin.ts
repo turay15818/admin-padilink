@@ -1873,6 +1873,15 @@ export type AdminTestimonialPage = {
 
 export type ChannelKindCount = { kind: string; label: string; asked: number; answered: number };
 
+export type ChannelHealth = {
+  key: string;
+  label: string;
+  live: boolean;
+  number?: string | null;
+  asked: number;
+  note: string;
+};
+
 export type ChannelOverview = {
   configured: boolean;
   number?: string | null;
@@ -1881,6 +1890,8 @@ export type ChannelOverview = {
   unanswered: number;
   silenced: number;
   kinds: ChannelKindCount[];
+  /** Both doors side by side: they fail separately and for different reasons. */
+  channels: ChannelHealth[];
 };
 
 export const adminApi = {
