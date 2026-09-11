@@ -6,7 +6,6 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { Shell } from './Shell';
 import { SignIn } from '../pages/SignIn';
-import { Testimonials } from '../pages/Testimonials';
 import { Overview } from '../pages/Overview';
 import { People, Person } from '../pages/People';
 import { Growth } from '../pages/Growth';
@@ -32,6 +31,7 @@ import { Logs } from '../pages/Logs';
 import { MissionControl } from '../pages/MissionControl';
 import { Threats } from '../pages/Threats';
 import { Signals } from '../pages/Signals';
+import { Channels } from '../pages/Channels';
 import { Payments } from '../pages/Payments';
 import { Ambassadors } from '../pages/Ambassadors';
 import { Messages } from '../pages/Messages';
@@ -108,11 +108,11 @@ export function App() {
           <Route path="/mission-control" element={<MissionControl />} />
           <Route path="/threats" element={<Threats />} />
           <Route path="/signals" element={<Signals />} />
+          <Route path="/channels" element={<Channels />} />
           <Route path="/payments" element={<Payments />} />
           <Route path="/ambassadors" element={<Ambassadors />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/content" element={<Content identity={identity} />} />
-          <Route path="/testimonials" element={<Testimonials />} />
           <Route path="/learn" element={<Learn identity={identity} />} />
           <Route path="/notifications" element={<NotificationEnginePage />} />
           <Route path="/broadcasts" element={<Broadcasts identity={identity} />} />

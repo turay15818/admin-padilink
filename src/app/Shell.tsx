@@ -94,9 +94,6 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/catalog', label: 'Services', icon: 'services' },
       { to: '/bookings', label: 'Bookings', icon: 'booking' },
       { to: '/content', label: 'Posted content', icon: 'content' },
-      // Under Marketplace beside posted content, not under Reach: these are things
-      // people wrote, which we choose among — not things we placed.
-      { to: '/testimonials', label: 'What people say', icon: 'speech' },
       { to: '/learn', label: 'Learn', icon: 'training' },
       { to: '/documents', label: 'Documents', icon: 'certificate' },
       { to: '/identity', label: 'Identity', icon: 'certificate' },
@@ -136,6 +133,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/team', label: 'Admin team', icon: 'shield' },
       { to: '/languages', label: 'Languages', icon: 'speech' },
+      // Whether the WhatsApp number is still answering. Counts only — there is nothing else
+      // stored — and it is the only place a dead webhook shows up.
+      { to: '/channels', label: 'WhatsApp number', icon: 'speech' },
       { to: '/settings', label: 'Settings', icon: 'lock' },
       // Also reachable by clicking your own name below — but passwords live here, and
       // people look for them in the nav before they look in a footer.

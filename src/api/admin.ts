@@ -1871,6 +1871,18 @@ export type AdminTestimonialPage = {
 };
 
 
+export type ChannelKindCount = { kind: string; label: string; asked: number; answered: number };
+
+export type ChannelOverview = {
+  configured: boolean;
+  number?: string | null;
+  hours: number;
+  asked: number;
+  unanswered: number;
+  silenced: number;
+  kinds: ChannelKindCount[];
+};
+
 export const adminApi = {
   // ---- who is bringing people in ----
   ambassadors() {
@@ -2762,5 +2774,18 @@ export const adminApi = {
   /** Re-resolve every provider's district and stamp their map pin. Idempotent. */
   atlasRestamp() {
     return apiRequest<AtlasStampReport>(`${SKILLS_MAP}/restamp`, { method: 'POST' });
+  },
+
+  // ---- the WhatsApp number ----
+
+  /**
+   * Counts, and nothing else there could be.
+   *
+   * The tables behind this hold no phone number and no message — a one-way fingerprint, a kind
+   * of question, a timestamp. So there is no version of this screen that shows who asked what,
+   * and no request this client could make to get it.
+   */
+  channelOverview(hours: number) {
+    return apiRequest<ChannelOverview>(`/api/v1/secure/admin/channels/overview?hours=${hours}`);
   },
 };
