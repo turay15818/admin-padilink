@@ -1,3 +1,6 @@
+Recommendation fro Waritay, he said when a user want to upload profile picture from the app he should be able to open the camera and take a picture or select from the gallery. The app should also provide an option to crop the image before uploading. Additionally, it is recommended to compress the image to reduce file size and improve upload speed.
+
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
