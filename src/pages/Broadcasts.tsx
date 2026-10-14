@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../theme/ThemeProvider';
+import { districtName } from '../lib/districts';
 import {
   Button, Card, Cell, EmptyState, ErrorNote, Field, Input, Loading, Modal, PageHeader,
   Pill, Row, Table, Textarea, Toasts, fmtDateTime, timeAgo, useToasts,
@@ -177,7 +178,13 @@ export function Broadcasts({ identity }: { identity: AdminIdentity }) {
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                     {row.sendPush ? <Pill tone="neutral">Push</Pill> : null}
                     {row.sendEmail ? <Pill tone="warning">Email</Pill> : null}
+                    {row.sendSms ? <Pill tone="info">SMS</Pill> : null}
                   </div>
+                  {row.districtSlug || row.interestSkillName ? (
+                    <div style={{ fontSize: 11, color: t.textSubtle, marginTop: 3 }}>
+                      {[row.districtSlug ? `in ${districtName(row.districtSlug)}` : null, row.interestSkillName ? `looked for ${row.interestSkillName.toLowerCase()}` : null].filter(Boolean).join(' · ')}
+                    </div>
+                  ) : null}
                 </Cell>
                 <Cell>
                   <div style={{ fontSize: 13, fontWeight: 700, color: t.text }}>
@@ -186,6 +193,7 @@ export function Broadcasts({ identity }: { identity: AdminIdentity }) {
                   <div style={{ fontSize: 11.5, color: t.textSubtle, marginTop: 2 }}>
                     of {row.recipientCount.toLocaleString()} addressed
                     {row.emailedCount > 0 ? ` · ${row.emailedCount.toLocaleString()} emailed` : ''}
+                    {row.smsCount > 0 ? ` · ${row.smsCount.toLocaleString()} texted` : ''}
                   </div>
                 </Cell>
                 <Cell>

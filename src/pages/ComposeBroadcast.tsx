@@ -21,8 +21,16 @@ import { ImageUpload } from '../components/MediaUpload';
 import { FormPage, AsidePanel } from '../components/FormPage';
 import { EditGroup } from '../components/Audience';
 import {
-  adminApi, type AdvertScreenOption, type BroadcastPreview, type Segment,
+  adminApi, type AdvertScreenOption, type BroadcastPreview, type BroadcastTemplate, type Segment,
 } from '../api/admin';
+import { DISTRICTS, districtName } from '../lib/districts';
+
+/** A trade, as the picker shows it. Loaded once; the taxonomy is a few hundred rows. */
+type SkillOption = { id: string; name: string };
+const SMS_PART = 160;
+const SMS_MAX = 320;
+/** The route the app opens for "search for a trade": the providers screen, narrowed to one skill and, when aimed, one district. */
+const SEARCH_ROUTE = 'search';
 
 /** The advert vocabulary, so an operator learns "providers" once. */
 const AUDIENCES = [
@@ -67,6 +75,21 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
   // Held as a local datetime-local string. Converted to an instant only on send, because the
   // operator is thinking in Freetown time and the API thinks in UTC.
   const [when, setWhen] = useState('');
+  // Campaigns: the inbox subject, the text channel, where they are and what they looked for.
+  const [subject, setSubject] = useState('');
+  const [sendSms, setSendSms] = useState(false);
+  const [smsText, setSmsText] = useState('');
+  const [districtSlug, setDistrictSlug] = useState('');
+  const [interestSkillId, setInterestSkillId] = useState('');
+  const [interestDays, setInterestDays] = useState('');
+  const [skills, setSkills] = useState<SkillOption[]>([]);
+  const [searchSkill, setSearchSkill] = useState('');
+  const [templates, setTemplates] = useState<BroadcastTemplate[]>([]);
+  const [templateId, setTemplateId] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testNote, setTestNote] = useState<string | null>(null);
 
   // Zero means everyone, which is what the flags enum says and what somebody expects when
   // they leave the field alone.
@@ -87,28 +110,84 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
     // A button with no destination is a button that does nothing, and a destination with no
     // wording is a button nobody can read. Either half alone is dropped.
     ctaLabel: ctaRoute.trim() ? (ctaLabel.trim() || 'Open') : null,
-    ctaRoute: ctaRoute.trim() || null,
+    // "Search for a trade" is a route with the trade (and the district, when aimed) in it, so
+    // the button lands on the right list rather than on a blank search.
+    ctaRoute: ctaRoute === SEARCH_ROUTE
+      ? (searchSkill ? `providers?skill=${encodeURIComponent(skills.find(k => k.id === searchSkill)?.name ?? '')}${districtSlug ? `&district=${districtSlug}` : ''}` : null)
+      : (ctaRoute.trim() || null),
+    subject: subject.trim() || null,
+    sendSms,
+    smsText: smsText.trim() || null,
+    districtSlug: districtSlug || null,
+    interestSkillId: interestSkillId || null,
+    interestWithinDays: interestDays.trim() ? Number(interestDays) : null,
   };
+  const smsPreview = (smsText.trim() || `${title.trim()}: ${body.trim()}`).replace(/\s+/g, ' ');
+  const smsLength = Math.min(SMS_MAX, smsPreview.length + ' - Vacancy'.length);
+  const smsParts = Math.max(1, Math.ceil(smsLength / SMS_PART));
 
   // Re-counted whenever the audience changes, not on a button — the number is the point,
   // and a number you have to ask for is a number nobody looks at.
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
-      adminApi.previewBroadcast({ ...draft, title: 'preview', body: 'preview' })
+      adminApi.previewBroadcast({ ...draft, title: title.trim() || 'preview', body: body.trim() || 'preview' })
         .then(result => { if (!cancelled) setPreview(result); })
         .catch(() => { if (!cancelled) setPreview(null); });
     }, 300);
     return () => { cancelled = true; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audience, city]);
+  }, [audience, city, segmentId, districtSlug, interestSkillId, interestDays, sendPush, sendEmail, sendSms, smsText]);
 
   // The same list the advert composer offers, so "where does this button go" has one
   // answer across the console rather than a free-text box people mistype.
   useEffect(() => {
     adminApi.advertScreens().then(setScreens).catch(() => setScreens([]));
     adminApi.segments().then(setGroups).catch(() => setGroups([]));
+    adminApi.skillPage({ pageSize: 200, status: 'active', sort: 'name' }).then(page => setSkills(page.items.map(k => ({ id: k.id, name: k.name })))).catch(() => setSkills([]));
+    adminApi.broadcastTemplates().then(setTemplates).catch(() => setTemplates([]));
   }, []);
+
+  /** Start from a saved message: every field the template carries, the rest left alone. */
+  const applyTemplate = (id: string) => {
+    setTemplateId(id);
+    const tpl = templates.find(x => x.id === id);
+    if (!tpl) return;
+    setTitle(tpl.title); setSubject(tpl.subject ?? ''); setBody(tpl.body); setSmsText(tpl.smsText ?? '');
+    setAudiences(['2', '4', '8'].filter(bit => (tpl.audience & Number(bit)) !== 0));
+    setCity(tpl.city ?? ''); setDistrictSlug(tpl.districtSlug ?? '');
+    setInterestSkillId(tpl.interestSkillId ?? ''); setInterestDays(tpl.interestWithinDays ? String(tpl.interestWithinDays) : '');
+    setSegmentId(tpl.segmentId ?? '');
+    setSendPush(tpl.sendPush); setSendEmail(tpl.sendEmail); setSendSms(tpl.sendSms);
+    setImageUrl(tpl.imageUrl); setCtaLabel(tpl.ctaLabel ?? '');
+    if (tpl.ctaRoute?.startsWith('providers?skill=')) {
+      const name = decodeURIComponent(tpl.ctaRoute.slice('providers?skill='.length).split('&')[0]);
+      setCtaRoute(SEARCH_ROUTE); setSearchSkill(skills.find(k => k.name === name)?.id ?? '');
+    } else { setCtaRoute(tpl.ctaRoute ?? ''); }
+  };
+
+  const saveTemplate = () => {
+    if (!templateName.trim() || savingTemplate) return;
+    setSavingTemplate(true); setError(null);
+    adminApi.saveBroadcastTemplate({
+      name: templateName.trim(), title: draft.title, subject: draft.subject, body: draft.body, smsText: draft.smsText,
+      audience, city: draft.city, districtSlug: draft.districtSlug, interestSkillId: draft.interestSkillId, interestWithinDays: draft.interestWithinDays,
+      segmentId: draft.segmentId, sendPush, sendEmail, sendSms, imageUrl, ctaLabel: draft.ctaLabel, ctaRoute: draft.ctaRoute,
+    })
+      .then(saved => { setTemplates(list => [saved, ...list.filter(x => x.id !== saved.id)]); setTemplateId(saved.id); setTemplateName(''); setTestNote(`Saved as the template “${saved.name}”.`); })
+      .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'That did not save.'))
+      .finally(() => setSavingTemplate(false));
+  };
+
+  /** The lock screen, seen by one person before a thousand. */
+  const sendTest = () => {
+    if (testing || title.trim().length < 3 || body.trim().length < 10) return;
+    setTesting(true); setTestNote(null);
+    adminApi.testBroadcast(draft)
+      .then(result => setTestNote(result.message))
+      .catch((caught: unknown) => setTestNote(caught instanceof Error ? caught.message : 'The test did not go.'))
+      .finally(() => setTesting(false));
+  };
 
   // Writes into the two boxes and stops. Nothing here sends, and the operator has to read
   // what appeared before the send button will even enable — which is the same guard as before,
@@ -130,9 +209,12 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
 
   // A saved group brings its own count, worked out by the API when it was listed. The plain
   // preview only knows about the audience flags, so it would say the wrong number here.
-  const reachable = chosenGroup?.reachableNow ?? preview?.reachable ?? 0;
+  // The preview now understands saved groups and channels too, so it is the number whenever
+  // it has answered; the group's own count is the fallback while it is still counting.
+  const reachable = preview?.reachable ?? chosenGroup?.reachableNow ?? 0;
   const ready = title.trim().length >= 3 && body.trim().length >= 10
-    && (sendPush || sendEmail) && reachable > 0;
+    && (sendPush || sendEmail || sendSms) && reachable > 0
+    && (ctaRoute !== SEARCH_ROUTE || Boolean(searchSkill));
 
   const send = () => {
     if (!ready || busy) return;
@@ -165,12 +247,17 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
           </div>
           <div style={{ fontSize: 12.5, color: t.textMuted, marginTop: 4, lineHeight: 1.6 }}>
             {when
-              ? `will get this on their phone${sendEmail ? ' and by email' : ''} at `
+              ? `will get this ${channelWords(sendPush, sendEmail, sendSms)} at `
                 + `${fmtDateTime(new Date(when).toISOString())}, give or take a minute. You can call it `
                 + 'off any time before then. After it goes, nothing can call it back.'
-              : `will get this on their phone${sendEmail ? ' and by email' : ''}. There is no undo, and `
+              : `will get this ${channelWords(sendPush, sendEmail, sendSms)}. There is no undo, and `
                 + 'no way to edit it afterwards.'}
           </div>
+          {preview ? (
+            <div style={{ fontSize: 12, color: t.textMuted, marginTop: 6, lineHeight: 1.55 }}>
+              {[sendPush ? `${preview.byPush.toLocaleString()} by push` : null, sendEmail ? `${preview.byEmail.toLocaleString()} by e-mail` : null, sendSms ? `${preview.bySms.toLocaleString()} by text — ${preview.smsParts.toLocaleString()} billed part${preview.smsParts === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')}
+            </div>
+          ) : null}
           {when && chosenGroup ? (
             <div style={{ fontSize: 11.5, color: t.textSubtle, marginTop: 7, lineHeight: 1.55 }}>
               That count is who “{chosenGroup.name}” comes to now. The group is worked out again
@@ -221,7 +308,7 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
           {chosenGroup ? (
             <>
               <div style={{ fontSize: 19, fontWeight: 800, color: reachable === 0 ? t.warning : t.text }}>
-                {chosenGroup.reachableNow.toLocaleString()} people
+                {reachable.toLocaleString()} people
               </div>
               <div style={{ fontSize: 12, color: t.textMuted, marginTop: 3, lineHeight: 1.55 }}>
                 {chosenGroup.describes}
@@ -230,7 +317,8 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
                 {when
                   ? 'That is who the group comes to right now. It is worked out again when the '
                     + 'message actually goes, so this number will have moved by then.'
-                  : 'Worked out just now. Everyone in it has a device that can receive a notification.'}
+                  : 'Worked out just now, for the channels you chose.'}
+                {preview ? ` ${[sendPush ? `${preview.byPush.toLocaleString()} by push` : null, sendEmail ? `${preview.byEmail.toLocaleString()} by e-mail` : null, sendSms ? `${preview.bySms.toLocaleString()} by text` : null].filter(Boolean).join(' · ')}.` : ''}
               </div>
             </>
           ) : preview === null ? (
@@ -244,9 +332,13 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
                 {preview.summary}
               </div>
               <div style={{ fontSize: 11.5, color: t.textSubtle, marginTop: 5, lineHeight: 1.55 }}>
-                Reachable means they have a device that can receive it. Everyone else is counted in
-                the total and would get nothing.
+                Reachable means at least one channel you chose can get to them: a phone that takes a push, a verified e-mail address, or a phone number for a text.
               </div>
+              {sendSms && preview.bySms > 0 ? (
+                <div style={{ fontSize: 11.5, color: t.warning, marginTop: 5, lineHeight: 1.55 }}>
+                  {preview.smsParts.toLocaleString()} text-message part{preview.smsParts === 1 ? '' : 's'} will be billed.
+                </div>
+              ) : null}
             </>
           )}
         </div>
@@ -272,6 +364,11 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
               ctaLabel={ctaLabel.trim()}
             />
           </AsidePanel>
+          {sendSms ? (
+            <AsidePanel label="As a text message">
+              <SmsPreview text={smsPreview} />
+            </AsidePanel>
+          ) : null}
         </>
       }
       footer={
@@ -282,6 +379,9 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
           <span style={{ marginRight: 'auto' }}>
             {when ? <Pill tone="warning">Can be called off until it goes</Pill> : <Pill tone="danger">No undo</Pill>}
           </span>
+          <Button tone="subtle" disabled={testing || title.trim().length < 3 || body.trim().length < 10} onClick={sendTest}>
+            {testing ? 'Sending you a test…' : 'Send me a test'}
+          </Button>
           <Button tone="subtle" onClick={onClose}>Cancel</Button>
           <Button tone="primary" disabled={!ready} onClick={() => setConfirming(true)}>
             {when ? 'Review and schedule' : 'Review and send'}
@@ -289,6 +389,34 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
         </>
       }
     >
+      {/* Start from something that worked. A message that goes out every generator season is
+          written once and kept; the form fills in and the operator changes the date. */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 260px' }}>
+          <Field label="Start from a saved message" hint={templates.length === 0 ? 'None saved yet. Fill the form in and save it as one below.' : 'Optional. Fills every field in; change what you like.'}>
+            <Select
+              value={templateId}
+              onChange={value => applyTemplate(value ?? '')}
+              options={templates.map(tpl => ({ value: tpl.id, label: `${tpl.name}${tpl.useCount ? ` — used ${tpl.useCount}×` : ''}` }))}
+              placeholder="Write a new one"
+              clearable
+              clearLabel="Write a new one"
+              disabled={templates.length === 0}
+            />
+          </Field>
+        </div>
+        <div style={{ flex: '1 1 260px' }}>
+          <Field label="Save this as a message to reuse" hint="Everything on this form, under a name.">
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}><Input value={templateName} onChange={setTemplateName} placeholder="e.g. Generator season" onEnter={saveTemplate} /></div>
+              <Button tone="subtle" disabled={savingTemplate || !templateName.trim() || title.trim().length < 3 || body.trim().length < 10} onClick={saveTemplate}>{savingTemplate ? 'Saving…' : 'Save'}</Button>
+            </div>
+          </Field>
+        </div>
+      </div>
+      {testNote ? (
+        <div data-test-note style={{ fontSize: 12.5, color: t.text, background: t.surfaceMuted, border: `1px solid ${t.border}`, borderRadius: 10, padding: '9px 12px', marginBottom: 14, lineHeight: 1.55 }}>{testNote}</div>
+      ) : null}
       {/* Above the fields it fills in, so it reads as a starting point rather than a
           replacement for writing something. */}
       <div style={{
@@ -318,6 +446,12 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
       <Field label="Heading" hint="What shows on the lock screen. Short enough to read at a glance.">
         <Input value={title} onChange={setTitle} placeholder="e.g. Scheduled maintenance on Sunday" />
       </Field>
+
+      {sendEmail ? (
+        <Field label="E-mail subject" hint="Optional. The inbox has room for a sentence where the lock screen has room for five words. Empty uses the heading.">
+          <Input value={subject} onChange={setSubject} placeholder="e.g. Need a generator repaired before the rains? Here is who to call" />
+        </Field>
+      ) : null}
 
       <Field label="The message">
         <Textarea
@@ -394,6 +528,43 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
         </>
       ) : null}
 
+      {/* Aiming. Two ways the plain audience could not: where the person actually is, by the
+          position the app last reported, and what they actually did lately. "Need a generator
+          repaired?" to the people who were looking for one this month, in the district where
+          the rains are — not to everybody. Works on top of a saved group too. */}
+      <div style={{ border: `1px solid ${t.border}`, borderRadius: 12, padding: '12px 14px', marginBottom: 16, background: t.surfaceMuted }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: t.text, marginBottom: 2 }}>Aim it</div>
+        <div style={{ fontSize: 11.5, color: t.textSubtle, marginBottom: 10, lineHeight: 1.5 }}>Optional. Each one narrows the audience further{chosenGroup ? ', on top of the saved group' : ''}. The count beside you moves as you choose.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="In one district" hint="By where the person last was, as the app reported it — customers included, not only providers with a town on their profile.">
+            <Select
+              value={districtSlug}
+              onChange={value => setDistrictSlug(value ?? '')}
+              options={DISTRICTS.map(d => ({ value: d.slug, label: d.name }))}
+              placeholder="Everywhere"
+              clearable
+              clearLabel="Everywhere"
+            />
+          </Field>
+          <Field label="Who looked for a trade lately" hint="Searched for it, looked at somebody who does it, booked one, or posted a job asking for it.">
+            <Select
+              value={interestSkillId}
+              onChange={value => setInterestSkillId(value ?? '')}
+              options={skills.map(k => ({ value: k.id, label: k.name }))}
+              placeholder="Anybody"
+              clearable
+              clearLabel="Anybody"
+              searchPlaceholder="Type a trade…"
+            />
+          </Field>
+        </div>
+        {interestSkillId ? (
+          <Field label="Looking back how far" hint="Days. Thirty if you leave it empty.">
+            <Input value={interestDays} onChange={setInterestDays} placeholder="30" />
+          </Field>
+        ) : null}
+      </div>
+
       {/* When. Empty means now, which is what the button already said it meant. */}
       <Field
         label="When to send it"
@@ -429,14 +600,28 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
         <Select
           value={ctaRoute}
           onChange={value => setCtaRoute(value ?? '')}
-          options={screens.map(screen => ({ value: screen.key, label: screen.label }))}
+          options={[{ value: SEARCH_ROUTE, label: 'Search for a trade — providers who do one thing, near them' }, ...screens.map(screen => ({ value: screen.key, label: screen.label }))]}
           placeholder="Nowhere — just the message"
           clearable
           clearLabel="Nowhere — just the message"
         />
+        {ctaRoute === SEARCH_ROUTE ? (
+          <div style={{ marginTop: 8 }}>
+            <Select
+              value={searchSkill || interestSkillId}
+              onChange={value => setSearchSkill(value ?? '')}
+              options={skills.map(k => ({ value: k.id, label: k.name }))}
+              placeholder="Which trade the button searches for"
+              searchPlaceholder="Type a trade…"
+            />
+            <div style={{ fontSize: 11.5, color: t.textSubtle, marginTop: 6, lineHeight: 1.5 }}>
+              Opens the providers list already narrowed to that trade{districtSlug ? ` in ${districtName(districtSlug)}` : ''}.
+            </div>
+          </div>
+        ) : null}
         {ctaRoute ? (
           <div style={{ marginTop: 8 }}>
-            <Input value={ctaLabel} onChange={setCtaLabel} placeholder="What the button says — e.g. See the classes" />
+            <Input value={ctaLabel} onChange={setCtaLabel} placeholder="What the button says — e.g. Find a generator repairer" />
           </div>
         ) : null}
       </Field>
@@ -456,6 +641,17 @@ function Compose({ onClose, onDone }: { onClose: () => void; onDone: (message: s
           title="Also send it by email"
           detail="Off by default. The old announcement emailed everybody every time without saying so, which is the shortest route to being marked as spam."
         />
+        <Channel
+          on={sendSms}
+          onChange={setSendSms}
+          title="Also send it as a text message"
+          detail="Reaches a phone with no app and no data. Billed per 160-character part, so it is a decision — the count beside you says how many parts."
+        />
+        {sendSms ? (
+          <Field label="The text message" hint={`Optional. Written for 160 characters; empty sends the heading and message cut to fit. “ - Vacancy” is added. ${smsLength} of ${SMS_MAX} · ${smsParts} part${smsParts === 1 ? '' : 's'}.`}>
+            <Textarea value={smsText} onChange={value => setSmsText(value.slice(0, SMS_MAX - 10))} rows={2} placeholder={`${title.trim() || 'Heading'}: ${body.trim().slice(0, 100) || 'the message'}`} />
+          </Field>
+        ) : null}
       </div>
 
       {error ? <div style={{ marginBottom: 12 }}><ErrorNote message={error} /></div> : null}
@@ -585,6 +781,25 @@ function PhonePreview({ title, body, imageUrl, ctaLabel }: {
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+function channelWords(push: boolean, email: boolean, sms: boolean) {
+  const parts = [push ? 'on their phone' : null, email ? 'by e-mail' : null, sms ? 'as a text message' : null].filter(Boolean) as string[];
+  return parts.length === 0 ? 'nowhere' : parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
+/** The text, as a phone shows it: no heading, no picture, no button — what is written is all there is. */
+function SmsPreview({ text }: { text: string }) {
+  const { t } = useTheme();
+  const shown = text.length > SMS_MAX - 10 ? text.slice(0, SMS_MAX - 11) + '…' : text;
+  return (
+    <div style={{ background: t.surfaceMuted, border: `1px solid ${t.border}`, borderRadius: 14, padding: 11 }}>
+      <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: 14, padding: '9px 12px', fontSize: 12.5, color: t.text, lineHeight: 1.45, fontFamily: 'inherit', whiteSpace: 'pre-wrap' }}>
+        {shown || 'Your message'} - Vacancy
+      </div>
+      <div style={{ fontSize: 10.5, color: t.textSubtle, marginTop: 7, lineHeight: 1.5 }}>No heading, no picture, no button. The words are all there is, and every 160 characters is a billed part.</div>
     </div>
   );
 }

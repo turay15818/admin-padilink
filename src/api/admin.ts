@@ -270,6 +270,79 @@ export type SettingRow = {
 
 export type SettingsResponse = { settings: SettingRow[]; groups: string[]; canEdit: boolean };
 
+/* ---------- the control panel ---------- */
+
+/**
+ * One switchable part of the platform.
+ *
+ * `on` is what the switch says; `effective` is whether the platform will actually answer for
+ * it. They differ when a feature needs another one that is off — the switch reads on, and
+ * nothing works. The screen shows both, because showing only the switch is how an operator
+ * ends up staring at a feature that is on and broken.
+ */
+export type FeatureRow = {
+  code: string; area: string; label: string; description: string;
+  on: boolean; effective: boolean; default: boolean;
+  /** True when switching it off stops reads as well as changes. */
+  reachesReads: boolean;
+  needs: string[];
+  /** Features that are on now and would be dragged off with this one. */
+  blocking: string[];
+  /** The API route prefixes that stop answering. The evidence it is a real switch. */
+  paths: string[];
+  whenOff: string;
+  changedByName: string | null; changeReason: string | null; changedAt: string | null;
+  /** Whether it has a tab in the phone's bottom bar. Null for a feature with no tab to give. */
+  tab: boolean | null;
+  tabLabel: string | null;
+};
+
+export type ModuleCheck = { label: string; done: boolean; detail: string };
+
+/**
+ * A feature big enough to have its own screen: the switch, the tab, what placing the tab
+ * displaces, what has to be true before opening it, and the settings that belong to it.
+ */
+export type ModuleRow = {
+  code: string; label: string; description: string;
+  feature: FeatureRow;
+  /** What the phone's bar shows now, in order. */
+  bar: string[];
+  /** What it would show with this module's tab placed. */
+  barIfPlaced: string[];
+  /** Tabs that leave the bar to make room. */
+  displaces: string[];
+  checklist: ModuleCheck[];
+  settings: SettingRow[];
+};
+
+export type FeatureChange = { code: string; label: string; from: boolean; to: boolean };
+
+export type FeatureBundleRow = {
+  code: string; label: string; description: string;
+  /** Only what this move would actually change from where the switches are now. */
+  changes: FeatureChange[];
+  alreadyThere: boolean;
+};
+
+export type FeaturesResponse = {
+  features: FeatureRow[];
+  areas: string[];
+  bundles: FeatureBundleRow[];
+  notice: string;
+  offCount: number;
+  canEdit: boolean;
+  bar: string[];
+  modules: ModuleRow[];
+};
+
+export type NavDestination = { key: string; label: string; icon: string; feature: string | null; featureOn: boolean; signedIn: boolean; description: string };
+export type NavItem = { key: string; label: string | null; icon: string | null };
+export type BarTab = { key: string; label: string; icon: string; feature: string | null };
+export type NavigationResponse = {
+  destinations: NavDestination[]; arrangement: NavItem[]; arranged: boolean; bar: BarTab[]; icons: string[]; min: number; max: number; canEdit: boolean;
+};
+
 export type ExportKind = {
   key: string; label: string; description: string;
   personal: boolean; estimatedRows: number;
@@ -336,6 +409,9 @@ export type BroadcastRow = {
   openedCount: number;
   /** Against what was delivered, never against the audience. */
   openRatePercent: number | null;
+  /** Campaigns: the inbox subject, the text channel, and how it was aimed. */
+  subject: string | null; sendSms: boolean; smsCount: number;
+  districtSlug: string | null; interestSkillName: string | null; interestWithinDays: number | null;
 };
 
 export type BroadcastPage = {
@@ -352,7 +428,31 @@ export type BroadcastDraft = {
   segmentId?: string | null;
   /** ISO instant. Null sends now; the audience is resolved when it actually goes. */
   scheduledFor?: string | null;
+  /** The inbox subject. Null means the heading. */
+  subject?: string | null;
+  /** A text message as well. Billed per part. */
+  sendSms?: boolean;
+  smsText?: string | null;
+  /** One of the sixteen districts, by where the person last was. */
+  districtSlug?: string | null;
+  /** Only people who looked for this trade lately. */
+  interestSkillId?: string | null;
+  interestWithinDays?: number | null;
 };
+
+export type BroadcastTestResult = { pushed: boolean; emailed: boolean; texted: boolean; message: string };
+
+export type BroadcastTemplate = {
+  id: string; name: string; title: string; subject: string | null; body: string; smsText: string | null;
+  audience: number; city: string | null; districtSlug: string | null;
+  interestSkillId: string | null; interestSkillName: string | null; interestWithinDays: number | null;
+  segmentId: string | null; segmentName: string | null;
+  sendPush: boolean; sendEmail: boolean; sendSms: boolean;
+  imageUrl: string | null; ctaLabel: string | null; ctaRoute: string | null;
+  actorName: string; useCount: number; lastUsedAt: string | null; createdAt: string;
+};
+
+export type BroadcastTemplateDraft = Omit<BroadcastTemplate, 'id' | 'interestSkillName' | 'segmentName' | 'actorName' | 'useCount' | 'lastUsedAt' | 'createdAt'>;
 
 export type BroadcastMedia = {
   url: string; contentType: string; sizeBytes: number; fileName: string;
@@ -360,6 +460,8 @@ export type BroadcastMedia = {
 
 export type BroadcastPreview = {
   reachable: number; total: number; audienceLabel: string; summary: string;
+  /** How many of the reachable each channel can take, and how many SMS parts would be billed. */
+  byPush: number; byEmail: number; bySms: number; smsParts: number;
 };
 
 
@@ -600,6 +702,8 @@ export type Segment = {
   jobSeekerStates: number;
   describes: string; reachableNow: number;
   createdByName: string; createdAt: string; lastUsedAt: string | null; useCount: number;
+  /** Where they last were, and what they looked for lately. */
+  districtSlug: string | null; interestSkillId: string | null; interestSkillName: string | null; interestWithinDays: number | null;
 };
 
 /**
@@ -1063,6 +1167,31 @@ export type ImportFacilitiesResult = {
   skipped: number;
   notes: string[];
   rules: string[];
+};
+
+export type DemoPurgeGroup = {
+  key: string;
+  label: string;
+  /** The rule that selected these rows, written out, so nobody has to trust a name. */
+  rule: string;
+  accounts: number;
+  rows: number;
+  sample: string[];
+  /** The database refused this population. It alone rolled back; the others still stand. */
+  blocked: boolean;
+  blocker: string | null;
+};
+
+export type DemoPurgeReport = {
+  /** False for a preview: the deletion happened and was rolled back. */
+  committed: boolean;
+  groups: DemoPurgeGroup[];
+  accounts: number;
+  rows: number;
+  /** Matched a demo rule and was kept anyway, with the reason. The App Review pair lives here. */
+  protected: string[];
+  /** Every table the cascade reached and how many rows went from each, biggest first. */
+  tables: Record<string, number>;
 };
 
 export type DemoHealthStatus = {
@@ -2218,6 +2347,22 @@ export const adminApi = {
     return apiRequest<DemoHealthStatus>(`${BASE}/demo/health/clear`, { method: 'POST' });
   },
 
+  /**
+   * What going live would remove, and whether the database would allow it.
+   *
+   * Runs the whole deletion inside a transaction and rolls it back, so the numbers are what
+   * actually happened rather than what a count guessed — including which populations would be
+   * refused. Changes nothing.
+   */
+  demoPurgePreview() {
+    return apiRequest<DemoPurgeReport>(`${BASE}/demo/purge/preview`);
+  },
+
+  /** The same thing, kept. There is no undo. */
+  demoPurge() {
+    return apiRequest<DemoPurgeReport>(`${BASE}/demo/purge`, { method: 'POST' });
+  },
+
   // ---- passwords (encrypted in transit, administrators only) ----
   changeMyPassword(currentPassword: string, newPassword: string) {
     return securePost<{ message: string }>(`${BASE}/me/password`, { currentPassword, newPassword });
@@ -2256,6 +2401,45 @@ export const adminApi = {
   setSetting(key: string, value: string, reason?: string | null) {
     return apiRequest<SettingRow>(`${BASE}/settings`,
       { method: 'POST', body: { key, value, reason: reason ?? null } });
+  },
+
+  features() {
+    return apiRequest<FeaturesResponse>(`${BASE}/features`);
+  },
+
+  /**
+   * Throw one switch.
+   *
+   * Answers with the whole panel rather than one row, because one switch changes what several
+   * rows say — turning Health off takes Emergency and Family watch with it, and a screen that
+   * updated only the row you touched would show the other two as still on.
+   */
+  setFeature(code: string, on: boolean, reason: string) {
+    return apiRequest<FeaturesResponse>(`${BASE}/features/${encodeURIComponent(code)}`,
+      { method: 'POST', body: { on, reason } });
+  },
+
+  /** Give a feature a tab in the phone's bottom bar, or take it away. */
+  setFeatureTab(code: string, on: boolean, reason: string) {
+    return apiRequest<FeaturesResponse>(`${BASE}/features/${encodeURIComponent(code)}/tab`,
+      { method: 'POST', body: { on, reason } });
+  },
+
+  /** The bottom bar as a thing to arrange: the screens the phone has, the saved order, what it draws now. */
+  navigation() {
+    return apiRequest<NavigationResponse>(`${BASE}/navigation`);
+  },
+  saveNavigation(items: NavItem[], reason: string) {
+    return apiRequest<NavigationResponse>(`${BASE}/navigation/save`, { method: 'POST', body: { items, reason } });
+  },
+  resetNavigation(reason: string) {
+    return apiRequest<NavigationResponse>(`${BASE}/navigation/reset`, { method: 'POST', body: { on: false, reason } });
+  },
+
+  /** Throw a named set of switches together, under one reason. */
+  applyFeatureBundle(code: string, reason: string) {
+    return apiRequest<FeaturesResponse>(`${BASE}/features/bundles/${encodeURIComponent(code)}`,
+      { method: 'POST', body: { reason } });
   },
 
   exportKinds() {
@@ -2331,6 +2515,25 @@ export const adminApi = {
 
   sendBroadcast(draft: BroadcastDraft) {
     return apiRequest<BroadcastRow>(`${BASE}/broadcasts`, { method: 'POST', body: draft });
+  },
+
+  /** The same message, by the same channels, to the operator alone. Nothing is announced. */
+  testBroadcast(draft: BroadcastDraft) {
+    return apiRequest<BroadcastTestResult>(`${BASE}/broadcasts/test`, { method: 'POST', body: draft });
+  },
+
+  broadcastTemplates() {
+    return apiRequest<BroadcastTemplate[]>(`${BASE}/broadcasts/templates`);
+  },
+
+  saveBroadcastTemplate(body: BroadcastTemplateDraft, templateId?: string) {
+    return templateId
+      ? apiRequest<BroadcastTemplate>(`${BASE}/broadcasts/templates/${templateId}`, { method: 'PUT', body })
+      : apiRequest<BroadcastTemplate>(`${BASE}/broadcasts/templates`, { method: 'POST', body });
+  },
+
+  deleteBroadcastTemplate(templateId: string) {
+    return apiRequest<boolean>(`${BASE}/broadcasts/templates/${templateId}`, { method: 'DELETE' });
   },
 
   /** The picture an announcement carries. Multipart, like the advert media upload. */

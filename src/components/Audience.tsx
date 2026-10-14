@@ -7,11 +7,12 @@
  * the compose modal are demonstrably the same editor rather than two that agree today.
  */
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button, ErrorNote, Field, Input, Modal, Textarea } from './ui';
 import { Select } from './Select';
 import { adminApi, SEGMENT_FAMILIES, type Segment, type SegmentFamilyKey } from '../api/admin';
+import { DISTRICTS } from '../lib/districts';
 
 export function EditGroup({ group, onClose, onDone }: {
   group: Segment | null; onClose: () => void; onDone: (message: string) => void;
@@ -32,6 +33,15 @@ export function EditGroup({ group, onClose, onDone }: {
   const [riskDays, setRiskDays] = useState(group?.riskWithinDays ? String(group.riskWithinDays) : '');
   const [learnerStates, setLearnerStates] = useState(group?.learnerStates ?? 0);
   const [jobSeekerStates, setJobSeekerStates] = useState(group?.jobSeekerStates ?? 0);
+  const [districtSlug, setDistrictSlug] = useState(group?.districtSlug ?? '');
+  const [interestSkillId, setInterestSkillId] = useState(group?.interestSkillId ?? '');
+  const [interestDays, setInterestDays] = useState(group?.interestWithinDays ? String(group.interestWithinDays) : '');
+  const [skills, setSkills] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    adminApi.skillPage({ pageSize: 200, status: 'active', sort: 'name' })
+      .then(page => setSkills(page.items.map(k => ({ id: k.id, name: k.name }))))
+      .catch(() => setSkills([]));
+  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ready = name.trim().length > 0;
@@ -52,6 +62,9 @@ export function EditGroup({ group, onClose, onDone }: {
       riskWithinDays: riskDays.trim() ? Number(riskDays) : null,
       learnerStates,
       jobSeekerStates,
+      districtSlug: districtSlug || null,
+      interestSkillId: interestSkillId || null,
+      interestWithinDays: interestDays.trim() ? Number(interestDays) : null,
     }, group?.id)
       .then(saved => onDone(
         saved.reachableNow === 0
@@ -85,8 +98,36 @@ export function EditGroup({ group, onClose, onDone }: {
         />
       </Field>
 
-      <Field label="In which town (optional)" hint="Leave empty for everywhere.">
+      <Field label="In which town (optional)" hint="Matches the town on a provider's profile. Leave empty for everywhere.">
         <Input value={city} onChange={setCity} placeholder="Bo" />
+      </Field>
+
+      <Field label="In which district (optional)" hint="By where the person last was, as the app reported it — so customers count, not only providers with a town typed in.">
+        <Select
+          value={districtSlug}
+          onChange={value => setDistrictSlug(value ?? '')}
+          options={DISTRICTS.map(d => ({ value: d.slug, label: d.name }))}
+          placeholder="Everywhere"
+          clearable
+          clearLabel="Everywhere"
+        />
+      </Field>
+
+      <Field label="Who looked for a trade lately (optional)" hint="Searched for it, looked at somebody who does it, booked one, or posted a job asking for it.">
+        <Select
+          value={interestSkillId}
+          onChange={value => setInterestSkillId(value ?? '')}
+          options={skills.map(k => ({ value: k.id, label: k.name }))}
+          placeholder="Anybody"
+          clearable
+          clearLabel="Anybody"
+          searchPlaceholder="Type a trade…"
+        />
+        {interestSkillId ? (
+          <div style={{ marginTop: 8 }}>
+            <Input value={interestDays} onChange={setInterestDays} placeholder="Looking back how many days — 30 if empty" />
+          </div>
+        ) : null}
       </Field>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
