@@ -107,6 +107,23 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    // The national response directory. Its own group, because it is its own programme: the
+    // institutions, stations, units and numbers an emergency is routed to, built before the
+    // module opens and chased for as long as it is on.
+    title: 'Emergency',
+    items: [
+      // The desk first: on a bad day it is the only screen anybody opens.
+      { to: '/emergency/desk', label: 'Desk', icon: 'flag' },
+      { to: '/emergency', label: 'Directory', icon: 'shield' },
+      { to: '/emergency/verification', label: 'Numbers to ring', icon: 'flag' },
+      { to: '/emergency/categories', label: 'Categories', icon: 'content' },
+      { to: '/emergency/dispatchers', label: 'Dispatchers', icon: 'account' },
+      { to: '/emergency/fleet', label: 'Fleet', icon: 'truck' },
+      { to: '/emergency/command', label: 'Command', icon: 'insights' },
+      { to: '/emergency/analytics', label: 'Analytics', icon: 'spark' },
+    ],
+  },
+  {
     title: 'Money',
     items: [
       { to: '/payments', label: 'Payments', icon: 'agreement' },
@@ -136,6 +153,10 @@ const NAV_GROUPS: NavGroup[] = [
       // Whether the WhatsApp number is still answering. Counts only — there is nothing else
       // stored — and it is the only place a dead webhook shows up.
       { to: '/channels', label: 'WhatsApp number', icon: 'speech' },
+      // Health and Emergency as whole things: on or off, in the bar or not, ready or not.
+      // Their switches also sit on the Settings screen; this is where they are decided.
+      { to: '/modules', label: 'Modules', icon: 'shield' },
+      { to: '/navigation', label: 'Bottom bar', icon: 'overview' },
       { to: '/settings', label: 'Settings', icon: 'lock' },
       // Also reachable by clicking your own name below — but passwords live here, and
       // people look for them in the nav before they look in a footer.

@@ -225,6 +225,11 @@ export function Table({ head, children }: { head: ReactNode[]; children: ReactNo
   );
 }
 
+/** The button row at the foot of a dialog: right-aligned, cancel on the left of the verb. */
+export function Actions({ children }: { children: ReactNode }) {
+  return <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>{children}</div>;
+}
+
 export function Row({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
   const { t } = useTheme();
   const [hover, setHover] = useState(false);

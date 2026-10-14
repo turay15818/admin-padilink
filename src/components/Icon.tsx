@@ -35,6 +35,7 @@ const ICONS = {
   pulse: 'M2 12h4l2.5-7 4 14 3-9 2 2h4.5',
   advert: 'M3 9h4l7-4.5v15L7 15H3V9Z M18 9.5a4 4 0 0 1 0 5',
   account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M4 20.5v-.8c0-3 3.6-4.7 8-4.7s8 1.7 8 4.7v.8',
+  truck: 'M3 7h11v9H3z M14 10h4l3 3v3h-7 M6.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z M17.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z',
   // A calendar with a tick: a booking is a date somebody agreed to.
   booking: 'M4 6h16v14H4V6Z M4 10h16 M8 3v3 M16 3v3 M9 14.5l2 2 4-4',
   // A flag on a pole — what somebody raises when something is wrong.

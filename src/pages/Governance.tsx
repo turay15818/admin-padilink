@@ -15,24 +15,24 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTheme } from '../theme/ThemeProvider';
 import {
   Button, Card, Cell, ErrorNote, Field, Input, Loading, Modal, PageHeader,
-  Pill, Row, Table, Textarea, Toasts, fmtDateTime, useToasts,
+  Actions, Pill, Row, Table, Textarea, Toasts, fmtDateTime, useToasts,
 } from '../components/ui';
-import { adminApi, settingsChanged, type AdminIdentity, type PermissionRow, type RoleDetail, type RolesResponse, type SettingRow, type SettingsResponse } from '../api/admin';
+import { adminApi, settingsChanged, type AdminIdentity, type DemoPurgeReport, type FeatureBundleRow, type FeatureRow, type FeaturesResponse, type PermissionRow, type RoleDetail, type RolesResponse, type SettingRow, type SettingsResponse } from '../api/admin';
 import { QrCode } from '../components/QrCode';
 
 export function Governance({ identity }: { identity: AdminIdentity }) {
   const { t } = useTheme();
-  const [tab, setTab] = useState<'roles' | 'settings'>('roles');
+  const [tab, setTab] = useState<'features' | 'roles' | 'settings' | 'live'>('features');
 
   return (
     <>
       <PageHeader
         title="Settings"
-        subtitle="What each role is allowed to do, and the switches that change how Vacancy behaves."
+        subtitle="What is switched on, what each role may do, and the values that change how Vacancy behaves."
       />
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-        {(['roles', 'settings'] as const).map(option => (
+        {(['features', 'roles', 'settings', 'live'] as const).map(option => (
           <button
             key={option}
             type="button"
@@ -45,12 +45,189 @@ export function Governance({ identity }: { identity: AdminIdentity }) {
               cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
-            {option === 'roles' ? 'Roles and permissions' : 'Platform settings'}
+            {option === 'features' ? 'What is switched on'
+              : option === 'roles' ? 'Roles and permissions'
+                : option === 'settings' ? 'Platform settings' : 'Going live'}
           </button>
         ))}
       </div>
 
-      {tab === 'roles' ? <Roles identity={identity} /> : <Settings identity={identity} />}
+      {tab === 'features' ? <Features identity={identity} />
+        : tab === 'roles' ? <Roles identity={identity} />
+          : tab === 'settings' ? <Settings identity={identity} />
+            : <GoingLive />}
+    </>
+  );
+}
+
+/* ---------------- going live ---------------- */
+
+/**
+ * Taking the development data back out of a live database.
+ *
+ * <p>THE SHAPE OF THIS SCREEN IS THE POINT. Preview first, always, and the preview is not an
+ * estimate: the server runs the whole deletion inside a transaction and rolls it back, so what
+ * is listed below is what actually happened rather than what a count query guessed — including
+ * which populations the database would have refused and exactly which tables got touched.</p>
+ *
+ * <p>Read the table list before committing. The delete order is followed from the database's
+ * own foreign keys rather than a list in the source, which is what keeps it correct as the
+ * schema grows. A count against a table nobody expected is how a matching rule that caught too
+ * much announces itself — and at that point nothing has been kept.</p>
+ */
+function GoingLive() {
+  const { t } = useTheme();
+  const { push, toasts } = useToasts();
+  const [report, setReport] = useState<DemoPurgeReport | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const preview = () => {
+    setBusy(true);
+    setError(null);
+    adminApi.demoPurgePreview()
+      .then(result => { setReport(result); setDone(false); })
+      .catch(caught => setError(caught instanceof Error ? caught.message : 'That did not work.'))
+      .finally(() => setBusy(false));
+  };
+
+  const purge = () => {
+    setBusy(true);
+    adminApi.demoPurge()
+      .then(result => {
+        setReport(result);
+        setDone(true);
+        setConfirm(false);
+        push(`${result.accounts} seeded accounts removed, ${result.rows} rows in total.`);
+      })
+      .catch(caught => push(caught instanceof Error ? caught.message : 'That did not work.', 'error'))
+      .finally(() => setBusy(false));
+  };
+
+  const blocked = report?.groups.filter(group => group.blocked) ?? [];
+
+  return (
+    <>
+      <Toasts toasts={toasts} />
+
+      <Card style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <div style={{ fontWeight: 800, fontSize: 14.5, color: t.text }}>Remove the development data</div>
+            <div style={{ color: t.textMuted, fontSize: 13, marginTop: 4, lineHeight: 1.55 }}>
+              The demo marketplace providers and companies, the demo health cast, and the HR demo
+              employees — everything seeded while building, in one pass. Every rule is anchored on
+              an email domain that cannot receive mail, so no real person can match one. The App
+              Review accounts and the platform administrator are excluded by name.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Button tone="ghost" disabled={busy} onClick={preview}>
+              {busy && !confirm ? 'Checking…' : report ? 'Check again' : 'See what would go'}
+            </Button>
+            {report && !done && report.accounts > 0 ? (
+              <Button tone="danger" disabled={busy} onClick={() => setConfirm(true)}>Remove it</Button>
+            ) : null}
+          </div>
+        </div>
+      </Card>
+
+      {error ? <ErrorNote message={error} /> : null}
+
+      {report ? (
+        <>
+          <Card style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <Pill tone={done ? 'success' : report.accounts === 0 ? 'success' : 'warning'}>
+                {done ? 'removed' : report.accounts === 0 ? 'nothing left to remove' : 'nothing removed yet'}
+              </Pill>
+              <span style={{ color: t.text, fontSize: 13.5, fontWeight: 700 }}>
+                {report.accounts} accounts · {report.rows} rows
+              </span>
+              {blocked.length > 0 ? <Pill tone="danger">{blocked.length} refused by the database</Pill> : null}
+            </div>
+            {!done && report.accounts > 0 ? (
+              <div style={{ color: t.textMuted, fontSize: 12.5, marginTop: 8, lineHeight: 1.5 }}>
+                This was a real deletion, run and then rolled back — so these are the numbers it
+                actually produced, not an estimate. Nothing has changed.
+              </div>
+            ) : null}
+          </Card>
+
+          <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
+            {report.groups.map(group => (
+              <Card key={group.key}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 800, fontSize: 14, color: t.text }}>{group.label}</span>
+                  <Pill tone={group.blocked ? 'danger' : group.accounts > 0 ? 'warning' : 'success'}>
+                    {group.blocked ? 'refused' : `${group.accounts} accounts`}
+                  </Pill>
+                  {!group.blocked && group.rows > 0 ? (
+                    <span style={{ color: t.textMuted, fontSize: 12.5 }}>{group.rows} rows</span>
+                  ) : null}
+                </div>
+                <div style={{ color: t.textMuted, fontSize: 12.5, marginTop: 5, lineHeight: 1.5 }}>{group.rule}</div>
+                {group.blocker ? (
+                  <div style={{ color: t.danger, fontSize: 12.5, marginTop: 7, lineHeight: 1.5 }}>{group.blocker}</div>
+                ) : null}
+                {group.sample.length > 0 ? (
+                  <div style={{ color: t.textMuted, fontSize: 12.5, marginTop: 7, lineHeight: 1.7 }}>
+                    {group.sample.map(one => <div key={one}>{one}</div>)}
+                  </div>
+                ) : null}
+              </Card>
+            ))}
+          </div>
+
+          {/* Kept, and said out loud. Apple signs in as the review pair on every update, not
+              only the first — so "we did not touch these, and here is why" is the half of a
+              destructive operation somebody actually needs to read. */}
+          {report.protected.length > 0 ? (
+            <Card style={{ marginBottom: 12 }}>
+              <div style={{ fontWeight: 800, fontSize: 13.5, color: t.text, marginBottom: 6 }}>Kept on purpose</div>
+              <div style={{ color: t.textMuted, fontSize: 12.5, lineHeight: 1.7 }}>
+                {report.protected.map(one => <div key={one}>{one}</div>)}
+              </div>
+            </Card>
+          ) : null}
+
+          {Object.keys(report.tables).length > 0 ? (
+            <Card>
+              <div style={{ fontWeight: 800, fontSize: 13.5, color: t.text, marginBottom: 3 }}>Where it went</div>
+              <div style={{ color: t.textMuted, fontSize: 12.5, marginBottom: 9, lineHeight: 1.5 }}>
+                Every table the cascade reached. The order is followed from the database's own
+                foreign keys, so read this for a table you did not expect.
+              </div>
+              <div style={{ display: 'grid', gap: 4 }}>
+                {Object.entries(report.tables).map(([table, count]) => (
+                  <div key={table} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
+                    <span style={{ color: t.textMuted, fontFamily: 'ui-monospace, Menlo, monospace' }}>{table}</span>
+                    <span style={{ color: t.text, fontWeight: 700 }}>{count}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ) : null}
+        </>
+      ) : null}
+
+      {confirm ? (
+        <Modal title="Remove the development data?" onClose={() => setConfirm(false)}>
+          <p style={{ color: t.textMuted, fontSize: 13.5, lineHeight: 1.6, marginTop: 0 }}>
+            This permanently removes {report?.accounts} seeded accounts and {report?.rows} rows,
+            across the tables listed behind this dialog. There is no undo. The App Review accounts
+            and the platform administrator are excluded and stay.
+          </p>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <Button tone="ghost" onClick={() => setConfirm(false)}>Keep it</Button>
+            <Button tone="danger" disabled={busy} onClick={purge}>
+              {busy ? 'Removing…' : 'Remove it'}
+            </Button>
+          </div>
+        </Modal>
+      ) : null}
     </>
   );
 }
@@ -309,6 +486,417 @@ function PermissionTick({ permission, on, disabled, onToggle }: {
   );
 }
 
+/* ---------------- the control panel ---------------- */
+
+/**
+ * What is switched on.
+ *
+ * <p>THE POINT OF THIS SCREEN IS THAT THE SWITCHES ARE REAL. Every one of them takes the
+ * API's own routes away, not a button in the app — the prefixes are listed on each row so
+ * that claim can be checked rather than believed. An old build, a cached screen and a curl
+ * command all stop together.</p>
+ *
+ * <p>Two things a flat list of switches cannot say, and this screen must. First, a feature
+ * can be switched on and still be off, because something it needs is off — Emergency without
+ * Health. The row shows the switch and the live answer separately whenever they disagree.
+ * Second, switching one thing off can take others with it; the row says which, before, not
+ * after.</p>
+ *
+ * <p>The moves along the top are not a shortcut for typing. They are decisions somebody made
+ * once, in the quiet, with a name on them — so that at two in the morning the operator picks
+ * the name instead of remembering which four switches.</p>
+ */
+function Features({ identity }: { identity: AdminIdentity }) {
+  const { t } = useTheme();
+  const { toasts, push } = useToasts();
+  const [data, setData] = useState<FeaturesResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [asking, setAsking] = useState<FeatureRow | null>(null);
+  const [move, setMove] = useState<FeatureBundleRow | null>(null);
+  const [showing, setShowing] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    adminApi.features()
+      .then(result => { setData(result); setError(null); })
+      .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Could not load the control panel.'));
+  }, []);
+  useEffect(load, [load]);
+
+  if (error) return <ErrorNote message={error} />;
+  if (!data) return <Loading />;
+
+  const canEdit = data.canEdit && identity.isSuperAdmin;
+  const off = data.features.filter(feature => !feature.effective);
+
+  return (
+    <>
+      {/* The one line worth reading before anything else. Green is not decoration here —
+          an operator glancing at this screen wants to know whether today is normal. */}
+      <Card style={{ marginBottom: 14, borderColor: off.length ? t.warning : t.border }}>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: off.length ? t.warning : t.success }}>
+              {off.length === 0
+                ? 'Everything is switched on'
+                : `${off.length} ${off.length === 1 ? 'feature is' : 'features are'} switched off`}
+            </div>
+            <div style={{ fontSize: 12.5, color: t.textMuted, marginTop: 5, lineHeight: 1.6, maxWidth: 640 }}>
+              {off.length === 0
+                ? 'The apps are drawing every door, and the API is answering for all of them.'
+                : `The apps stop drawing ${off.length === 1 ? 'it' : 'them'}, and the API refuses ${off.length === 1 ? 'its' : 'their'} routes — ${off.map(feature => feature.label).join(', ')}.`}
+            </div>
+          </div>
+          <div style={{ flexShrink: 0 }}>
+            <Button size="sm" tone="subtle" onClick={() => setNotice(data.notice)} disabled={!canEdit}>
+              {data.notice ? 'Change what people are told' : 'Add a line for people'}
+            </Button>
+          </div>
+        </div>
+        {data.notice ? (
+          <div style={{
+            marginTop: 12, padding: '9px 12px', borderRadius: 10,
+            background: t.warningSoft, border: `1px solid ${t.warning}`,
+            fontSize: 12.5, color: t.text, lineHeight: 1.55,
+          }}>
+            Shown in the apps: “{data.notice}”
+          </div>
+        ) : null}
+      </Card>
+
+      {/* Quick moves. Each says what it would actually change from here, so the one that
+          would change nothing says so rather than asking for a reason to do nothing. */}
+      <h2 style={{ margin: '0 0 9px', fontSize: 15, fontWeight: 800, color: t.text }}>Quick moves</h2>
+      <div style={{
+        display: 'grid', gap: 10, marginBottom: 20,
+        gridTemplateColumns: 'repeat(auto-fill, minmax(232px, 1fr))',
+      }}>
+        {data.bundles.map(bundle => (
+          <Card key={bundle.code} pad={14} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: t.text }}>{bundle.label}</div>
+            <div style={{ fontSize: 12, color: t.textMuted, lineHeight: 1.55, flex: 1 }}>
+              {bundle.description}
+            </div>
+            <div style={{ fontSize: 11.5, color: t.textSubtle }}>
+              {bundle.alreadyThere
+                ? 'Nothing to change — already where this leaves things.'
+                : `Would move ${bundle.changes.length} switch${bundle.changes.length === 1 ? '' : 'es'}.`}
+            </div>
+            <Button
+              size="sm"
+              tone={bundle.alreadyThere ? 'subtle' : 'primary'}
+              disabled={!canEdit || bundle.alreadyThere}
+              onClick={() => setMove(bundle)}
+            >
+              {bundle.alreadyThere ? 'Already done' : 'Review and apply'}
+            </Button>
+          </Card>
+        ))}
+      </div>
+
+      {data.areas.map(area => (
+        <div key={area} style={{ marginBottom: 16 }}>
+          <h2 style={{ margin: '0 0 9px', fontSize: 15, fontWeight: 800, color: t.text }}>{area}</h2>
+          <Card pad={0}>
+            {data.features.filter(feature => feature.area === area).map((feature, index, all) => (
+              <div
+                key={feature.code}
+                // Named, not positioned. Inserting a feature above another must not silently
+                // retarget whatever is pointing at this row.
+                data-feature={feature.code}
+                style={{
+                  display: 'flex', gap: 14, alignItems: 'flex-start', padding: '14px 18px',
+                  borderBottom: index === all.length - 1 ? 'none' : `1px solid ${t.border}`,
+                  // A hairline in the feature's own state, so the column reads at a glance
+                  // without anybody parsing the pills.
+                  borderLeft: `3px solid ${feature.effective ? 'transparent' : t.warning}`,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: t.text }}>{feature.label}</span>
+                    <code style={{ fontSize: 11, color: t.textSubtle, fontFamily: 'ui-monospace, monospace' }}>
+                      {feature.code}
+                    </code>
+                    {feature.on !== feature.default ? <Pill tone="info">changed</Pill> : null}
+                    {!feature.reachesReads ? <Pill tone="neutral">changes only</Pill> : null}
+                    {/* The case worth shouting about: the switch says on, the platform says
+                        no. Without this the row is simply wrong. */}
+                    {feature.on && !feature.effective ? <Pill tone="warning">held off by what it needs</Pill> : null}
+                  </div>
+
+                  <div style={{ fontSize: 12.5, color: t.textMuted, marginTop: 4, lineHeight: 1.6, maxWidth: 640 }}>
+                    {feature.description}
+                  </div>
+
+                  {feature.on && feature.blocking.length > 0 ? (
+                    <div style={{ fontSize: 11.5, color: t.warning, marginTop: 6, lineHeight: 1.5, fontWeight: 600 }}>
+                      Switching this off also stops: {feature.blocking.join(', ')}
+                    </div>
+                  ) : null}
+
+                  {feature.changedByName ? (
+                    <div style={{ fontSize: 11.5, color: t.textSubtle, marginTop: 5, lineHeight: 1.5 }}>
+                      {feature.changedByName}
+                      {feature.changedAt ? ` · ${fmtDateTime(feature.changedAt)}` : ''}
+                      {feature.changeReason ? ` — ${feature.changeReason}` : ''}
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowing(showing === feature.code ? null : feature.code)}
+                    style={{
+                      background: 'none', border: 'none', padding: '6px 0 0', cursor: 'pointer',
+                      color: t.textSubtle, fontSize: 11.5, fontFamily: 'inherit', fontWeight: 600,
+                    }}
+                  >
+                    {showing === feature.code ? 'Hide what it covers' : `What it covers (${feature.paths.length} routes)`}
+                  </button>
+
+                  {showing === feature.code ? (
+                    <div style={{
+                      marginTop: 7, padding: '9px 11px', borderRadius: 9,
+                      background: t.brandSoft, border: `1px solid ${t.border}`,
+                      fontSize: 11.5, color: t.textMuted, lineHeight: 1.75,
+                      fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all',
+                    }}>
+                      {feature.paths.join('\n')}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div style={{ flexShrink: 0, minWidth: 96, textAlign: 'right' }}>
+                  <Button
+                    size="sm"
+                    tone={feature.on ? 'primary' : 'subtle'}
+                    disabled={!canEdit}
+                    onClick={() => setAsking(feature)}
+                  >
+                    {feature.on ? 'On' : 'Off'}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </Card>
+        </div>
+      ))}
+
+      {asking ? (
+        <FeatureDialog
+          feature={asking}
+          onClose={() => setAsking(null)}
+          onDone={(result, message) => { setData(result); push(message); settingsChanged(); }}
+        />
+      ) : null}
+
+      {move ? (
+        <BundleDialog
+          bundle={move}
+          onClose={() => setMove(null)}
+          onDone={(result, message) => { setData(result); push(message); settingsChanged(); }}
+        />
+      ) : null}
+
+      {notice !== null ? (
+        <NoticeDialog
+          value={notice}
+          onClose={() => setNotice(null)}
+          onDone={message => { push(message); load(); }}
+        />
+      ) : null}
+
+      <Toasts toasts={toasts} />
+    </>
+  );
+}
+
+/**
+ * Throwing one switch.
+ *
+ * <p>Always a dialog, never an inline flip. Every feature switch changes what somebody can do
+ * in an app they are holding right now, and the API refuses to save one without a reason —
+ * so a one-tap toggle would only be a way to discover that, twice.</p>
+ */
+export function FeatureDialog({ feature, onClose, onDone }: {
+  feature: FeatureRow;
+  onClose: () => void;
+  onDone: (result: FeaturesResponse, message: string) => void;
+}) {
+  const { t } = useTheme();
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const going = !feature.on;
+
+  const save = () => {
+    setBusy(true);
+    setError(null);
+    adminApi.setFeature(feature.code, going, reason.trim())
+      .then(result => {
+        onDone(result, `${feature.label} switched ${going ? 'on' : 'off'}.`);
+        onClose();
+      })
+      .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'That did not work.'))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <Modal title={`Switch ${feature.label} ${going ? 'on' : 'off'}`} onClose={onClose} width={520}>
+      <div style={{ fontSize: 12.5, color: t.textMuted, lineHeight: 1.65, marginBottom: 12 }}>
+        {feature.description}
+      </div>
+
+      {/* What actually happens, in the order somebody cares about it: to people first,
+          to the API second. */}
+      <div style={{
+        padding: '11px 13px', borderRadius: 10, marginBottom: 14,
+        background: going ? t.successSoft : t.warningSoft,
+        border: `1px solid ${going ? t.success : t.warning}`,
+        fontSize: 12.5, color: t.text, lineHeight: 1.6,
+      }}>
+        {going ? (
+          <>The apps start drawing it again, and the API answers for its {feature.paths.length} routes.</>
+        ) : (
+          <>
+            The apps stop drawing it. Anyone who asks anyway is told:
+            {' '}“{feature.whenOff}”
+            {feature.reachesReads
+              ? ' Reads stop too — the pages go, not just the buttons.'
+              : ' Reads keep working; nothing new can be created or changed.'}
+            {feature.blocking.length > 0
+              ? ` ${feature.blocking.join(' and ')} stop with it, because they need this.`
+              : ''}
+          </>
+        )}
+      </div>
+
+      <Field
+        label="Why"
+        hint="Recorded against this switch and read back weeks later, when somebody asks why it moved."
+      >
+        <Textarea value={reason} onChange={setReason} rows={3} placeholder="The model was answering badly all afternoon." />
+      </Field>
+
+      {error ? <ErrorNote message={error} /> : null}
+
+      <Actions>
+        <Button tone="subtle" onClick={onClose}>Cancel</Button>
+        <Button tone={going ? 'primary' : 'danger'} disabled={busy || !reason.trim()} onClick={save}>
+          {busy ? 'Saving…' : going ? 'Switch it on' : 'Switch it off'}
+        </Button>
+      </Actions>
+    </Modal>
+  );
+}
+
+/** A named move, with every switch it would throw listed before it throws any of them. */
+function BundleDialog({ bundle, onClose, onDone }: {
+  bundle: FeatureBundleRow;
+  onClose: () => void;
+  onDone: (result: FeaturesResponse, message: string) => void;
+}) {
+  const { t } = useTheme();
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = () => {
+    setBusy(true);
+    setError(null);
+    adminApi.applyFeatureBundle(bundle.code, reason.trim())
+      .then(result => {
+        onDone(result, `${bundle.label} applied.`);
+        onClose();
+      })
+      .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'That did not work.'))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <Modal title={bundle.label} onClose={onClose} width={520}>
+      <div style={{ fontSize: 12.5, color: t.textMuted, lineHeight: 1.65, marginBottom: 12 }}>
+        {bundle.description}
+      </div>
+
+      <div style={{ border: `1px solid ${t.border}`, borderRadius: 11, overflow: 'hidden', marginBottom: 14 }}>
+        {bundle.changes.map((change, index) => (
+          <div
+            key={change.code}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+              padding: '9px 13px', fontSize: 12.5,
+              borderBottom: index === bundle.changes.length - 1 ? 'none' : `1px solid ${t.border}`,
+            }}
+          >
+            <span style={{ color: t.text, fontWeight: 600 }}>{change.label}</span>
+            <span style={{ color: change.to ? t.success : t.warning, fontWeight: 700, whiteSpace: 'nowrap' }}>
+              {change.from ? 'On' : 'Off'} → {change.to ? 'On' : 'Off'}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <Field label="Why" hint="Carried onto every switch this moves, so they read as one decision rather than five.">
+        <Textarea value={reason} onChange={setReason} rows={3} placeholder="Costs ran away overnight; quieting everything optional until morning." />
+      </Field>
+
+      {error ? <ErrorNote message={error} /> : null}
+
+      <Actions>
+        <Button tone="subtle" onClick={onClose}>Cancel</Button>
+        <Button tone="primary" disabled={busy || !reason.trim()} onClick={save}>
+          {busy ? 'Applying…' : `Move ${bundle.changes.length} switch${bundle.changes.length === 1 ? '' : 'es'}`}
+        </Button>
+      </Actions>
+    </Modal>
+  );
+}
+
+/**
+ * The line the apps show while anything is off.
+ *
+ * <p>Worth its own dialog because it is the only part of this screen a customer ever reads.
+ * Each feature already says its own sentence; this is for the thing only today knows — when
+ * you expect to be back.</p>
+ */
+function NoticeDialog({ value, onClose, onDone }: {
+  value: string;
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const [text, setText] = useState(value);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = () => {
+    setBusy(true);
+    setError(null);
+    adminApi.setSetting('features.notice', text.trim())
+      .then(() => { onDone(text.trim() ? 'Saved.' : 'Removed.'); onClose(); })
+      .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'That did not work.'))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <Modal title="What to tell people" onClose={onClose} width={470}>
+      <Field
+        label="One line"
+        hint="Added to whatever the switched-off feature already says. Leave it empty to say nothing extra."
+      >
+        <Textarea value={text} onChange={setText} rows={3} placeholder="Back on Monday morning." />
+      </Field>
+
+      {error ? <ErrorNote message={error} /> : null}
+
+      <Actions>
+        <Button tone="subtle" onClick={onClose}>Cancel</Button>
+        <Button tone="primary" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</Button>
+      </Actions>
+    </Modal>
+  );
+}
+
 /* ---------------- settings ---------------- */
 
 function Settings({ identity }: { identity: AdminIdentity }) {
@@ -498,7 +1086,7 @@ function PreviewLink({ label, url, missing, t }: {
   );
 }
 
-function SettingDialog({ setting, onClose, onDone }: {
+export function SettingDialog({ setting, onClose, onDone }: {
   setting: SettingRow;
   onClose: () => void;
   onDone: (message: string) => void;

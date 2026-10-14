@@ -44,6 +44,17 @@ import { EditAudience } from '../pages/EditAudience';
 import { ComposeBroadcast } from '../pages/ComposeBroadcast';
 import { Promos } from '../pages/Promos';
 import { Governance } from '../pages/Governance';
+import { Modules } from '../pages/Modules';
+import { EmergencyDirectory } from '../pages/EmergencyDirectory';
+import { EmergencyInstitution } from '../pages/EmergencyInstitution';
+import { EmergencyAnalytics } from '../pages/EmergencyAnalytics';
+import { EmergencyVerification } from '../pages/EmergencyVerification';
+import { EmergencyDesk } from '../pages/EmergencyDesk';
+import { EmergencyDispatchers } from '../pages/EmergencyDispatchers';
+import { EmergencyFleet } from '../pages/EmergencyFleet';
+import { EmergencyCommand } from '../pages/EmergencyCommand';
+import { EmergencyCategories } from '../pages/EmergencyCategories';
+import { Navigation } from '../pages/Navigation';
 import { Ledger } from '../pages/Ledger';
 import { Reports } from '../pages/Reports';
 import { AcceptInvite } from '../pages/AcceptInvite';
@@ -126,6 +137,17 @@ export function App() {
           <Route path="/team" element={<Team identity={identity} />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/ledger" element={<Ledger />} />
+          <Route path="/modules" element={<Modules identity={identity} />} />
+          <Route path="/emergency" element={<EmergencyDirectory identity={identity} />} />
+          <Route path="/emergency/institutions/:id" element={<EmergencyInstitution identity={identity} />} />
+          <Route path="/emergency/verification" element={<EmergencyVerification identity={identity} />} />
+          <Route path="/emergency/desk" element={<EmergencyDesk identity={identity} />} />
+          <Route path="/emergency/dispatchers" element={<EmergencyDispatchers identity={identity} />} />
+          <Route path="/emergency/fleet" element={<EmergencyFleet identity={identity} />} />
+          <Route path="/emergency/command" element={<EmergencyCommand identity={identity} />} />
+          <Route path="/emergency/analytics" element={<EmergencyAnalytics identity={identity} />} />
+          <Route path="/emergency/categories" element={<EmergencyCategories identity={identity} />} />
+          <Route path="/navigation" element={<Navigation identity={identity} />} />
           <Route path="/settings" element={<Governance identity={identity} />} />
           <Route path="/account" element={<Account identity={identity} />} />
           {/* A page, not a redirect. Sending an unknown URL to the overview means somebody
