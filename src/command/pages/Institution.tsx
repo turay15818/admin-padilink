@@ -403,7 +403,8 @@ function OfficeDialog({ dir, office, defaultParent, onClose, onDone }: { dir: De
   const [kind, setKind] = useState(String(o?.kind ?? dir.options.kinds[0]?.kind ?? 1));
   const [status, setStatus] = useState(String(o?.status === 3 || o?.status === 1 ? o.status : 2));
   const [parentId, setParentId] = useState(o?.parentId ?? defaultParent ?? '');
-  const [districtSlug, setDistrictSlug] = useState(o?.districtSlug ?? '');
+  const ownDistrict = dir.level === 2 ? dir.managesDistrictSlug : null;
+  const [districtSlug, setDistrictSlug] = useState(o?.districtSlug ?? ownDistrict ?? '');
   const [community, setCommunity] = useState(o?.community ?? '');
   const [address, setAddress] = useState(o?.address ?? '');
   const [landmark, setLandmark] = useState(o?.landmark ?? '');
@@ -426,7 +427,7 @@ function OfficeDialog({ dir, office, defaultParent, onClose, onDone }: { dir: De
   // Where this office may hang: offices the writer supervises, two levels deep at most, never itself or anything under it.
   const under = useMemo(() => { const set = new Set<string>(); if (!o) return set; const walk = (id: string) => dir.offices.filter(x => x.parentId === id).forEach(x => { set.add(x.id); walk(x.id); }); walk(o.id); return set; }, [dir.offices, o]);
   const parents = dir.offices.filter(x => x.manageable && x.depth < 2 && x.id !== o?.id && !under.has(x.id)).sort((a, b) => a.depth - b.depth || a.name.localeCompare(b.name));
-  const mayBeTop = dir.canEditProfile || (o !== null && o.parentId === null);
+  const mayBeTop = dir.canEditProfile || dir.level === 2 || (o !== null && o.parentId === null);
 
   const locate = () => {
     if (!navigator.geolocation) { setError('This browser cannot read a position.'); return; }
@@ -458,7 +459,7 @@ function OfficeDialog({ dir, office, defaultParent, onClose, onDone }: { dir: De
             <Select value={parentId} onChange={setParentId}>{mayBeTop ? <option value="">— top of the chart —</option> : null}{parents.map(p => <option key={p.id} value={p.id}>{'  '.repeat(p.depth)}{p.name}</option>)}</Select>
           </Field>
           <div style={{ display: 'grid', gap: '0 12px', gridTemplateColumns: '1fr 1fr' }}>
-            <Field label="District"><Select value={districtSlug} onChange={v => { setDistrictSlug(v); if (!coverageDistrict) setCoverageDistrict(v); }}><option value="">—</option>{dir.options.districts.map(x => <option key={x.slug} value={x.slug}>{x.name}</option>)}</Select></Field>
+            <Field label="District" hint={ownDistrict ? 'Your district command records offices in its own district.' : undefined}><Select value={districtSlug} disabled={Boolean(ownDistrict)} onChange={v => { setDistrictSlug(v); if (!coverageDistrict) setCoverageDistrict(v); }}><option value="">—</option>{dir.options.districts.filter(x => !ownDistrict || x.slug === ownDistrict).map(x => <option key={x.slug} value={x.slug}>{x.name}</option>)}</Select></Field>
             <Field label="Community"><Input value={community} onChange={setCommunity} /></Field>
           </div>
           <Field label="Address"><Input value={address} onChange={setAddress} /></Field>

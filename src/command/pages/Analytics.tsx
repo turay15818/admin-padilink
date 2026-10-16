@@ -19,6 +19,7 @@ import { LiveMap } from '../LiveMap';
 import { T } from '../theme';
 import { Btn, Empty, ErrorLine, Eyebrow, Input, Loading, Panel, Segmented, Select, Tile, delta, minutesWord, pct } from '../ui';
 import { useCommand } from '../useCommand';
+import { CaseTypeTable, CategoryKey, InstitutionLeague, MatrixTable, Recommendations, RegionTable } from './Intelligence';
 
 const OUTCOME_COLOURS: Record<number, string> = { 1: T.good, 2: T.warn, 3: T.series[4], 4: T.subtle, 5: T.bad, 6: T.line2, 7: T.series[0], 8: T.muted };
 
@@ -104,6 +105,9 @@ export function Analytics() {
           ))}
         </div>
 
+        {/* what to do */}
+        {(data.recommendations?.length ?? 0) > 0 ? <Recommendations items={data.recommendations!} onDistrict={slug => setFilters({ district: slug })} onStation={id => navigate(`/stations/${id}`)} /> : null}
+
         {/* the numbers */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(136px, 1fr))', gap: 8 }}>
           <Tile label="Reported" value={h.reported} note={<Change now={h.reported} before={h.reportedBefore} on={filters.compare} />} />
@@ -159,6 +163,22 @@ export function Analytics() {
             <div style={{ height: 320 }}><LiveMap live={null} shapes={shapes} hotspots={hotspots} fit height="100%" /></div>
           </Panel>
         </div>
+
+        {(data.window.institutions ?? 1) > 1 && (data.institutionsLeague?.length ?? 0) > 1 ? (
+          <Panel flush title="Institutions" note={`${data.institutionsLeague!.length} compared on the same figures`}>
+            <div style={{ padding: '4px 8px' }}><InstitutionLeague rows={data.institutionsLeague!} compare={filters.compare} /></div>
+          </Panel>
+        ) : null}
+
+        <div className="cc-grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12, alignItems: 'start' }}>
+          {(data.regions?.length ?? 0) > 1 ? <Panel flush title="Regions" note="provinces, rolled up from their districts"><div style={{ padding: '4px 8px' }}><RegionTable data={data.regions!} compare={filters.compare} /></div></Panel> : null}
+          <Panel flush title="Kinds of case" note="and how fast each is answered"><div style={{ padding: '4px 8px' }}><CaseTypeTable data={data.categories} compare={filters.compare} /></div></Panel>
+        </div>
+        {(data.matrix?.length ?? 0) > 1 ? (
+          <Panel flush title="Where each kind of case comes from" note="station × kind of case" action={<CategoryKey />}>
+            <div style={{ padding: '4px 4px' }}><MatrixTable rows={data.matrix!} onStation={id => navigate(`/stations/${id}`)} /></div>
+          </Panel>
+        ) : null}
 
         <div className="cc-grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: 12 }}>
           <Panel title="Districts" note={`${data.districts.length} with reports`} flush>

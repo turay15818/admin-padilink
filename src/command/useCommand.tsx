@@ -7,6 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { connectEmergencyLive, type LiveHandle } from '../api/emergencyLive';
 import { commandApi, type Access, type CommandInstitutionOption, type DistrictShape } from './api';
 import { titleCase } from './ui';
+import { steadyInterval } from './ticker';
 
 type CommandContext = {
   access: Access;
@@ -68,8 +69,9 @@ export function CommandProvider({ access, onSignOut, children }: { access: Acces
   useEffect(() => { commandApi.shapes().then(s => setShapes(s.districts)).catch(() => setShapes([])); }, []);
   useEffect(() => { commandApi.institutions().then(list => setInstitutions(Array.isArray(list) ? list : [])).catch(() => setInstitutions([])); }, []);
   useEffect(() => { const h = window.setInterval(() => setClock(new Date()), 1000); return () => window.clearInterval(h); }, []);
-  // The desk's floor: even with the socket down, nothing is more than half a minute stale.
-  useEffect(() => { const h = window.setInterval(() => setTick(x => x + 1), 30_000); return () => window.clearInterval(h); }, []);
+  // The desk's floor: even with the socket down, nothing is more than a quarter of a minute stale —
+  // which is as long as a new report can wait before the room hears of it.
+  useEffect(() => steadyInterval(() => setTick(x => x + 1), 15_000), []);
 
   const institutionId = access.national ? (chosen && institutions.some(i => i.id === chosen) ? chosen : chosen && institutions.length === 0 ? chosen : access.institutionId) : access.institutionId;
   const institutionName = institutions.find(i => i.id === institutionId)?.name ?? (institutionId === access.institutionId ? access.institutionName : null);

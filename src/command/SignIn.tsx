@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AdminChallenge } from '../api/admin';
 import { describeDevice } from '../api/secure';
 import { authApi, errorWords, type Access } from './api';
+import { googleIdToken, GoogleCancelled } from './google';
 import { T } from './theme';
 import { Btn, ErrorLine, Field, Input, LiveDot } from './ui';
 
@@ -78,6 +79,15 @@ export function SignIn({ onSignedIn }: { onSignedIn: (access: Access) => void })
       .catch((caught: unknown) => { setError(errorWords(caught, 'That did not work.')); setCode(''); })
       .finally(() => setBusy(false));
   };
+  const withGoogle = () => {
+    if (busy) return;
+    setBusy(true); setError(null);
+    googleIdToken()
+      .then(token => authApi.google(token, device))
+      .then(onSignedIn)
+      .catch((caught: unknown) => { if (!(caught instanceof GoogleCancelled)) setError(errorWords(caught, 'Google sign-in failed.')); })
+      .finally(() => setBusy(false));
+  };
   const resend = () => {
     if (!challenge || resendIn > 0 || busy) return;
     setBusy(true); setError(null);
@@ -127,7 +137,13 @@ export function SignIn({ onSignedIn }: { onSignedIn: (access: Access) => void })
               <Field label="Password"><Input value={password} onChange={setPassword} type="password" /></Field>
               {error ? <div style={{ marginBottom: 12 }}><ErrorLine>{error}</ErrorLine></div> : null}
               <Btn type="submit" tone="primary" disabled={busy} style={{ width: '100%', padding: '11px 14px', fontSize: 14 }}>{busy ? 'Checking…' : 'Continue'}</Btn>
-              <div style={{ fontSize: 11.5, color: T.subtle, marginTop: 14, lineHeight: 1.5 }}>Your desk's supervisor puts you on the desk; Vacancy does not. If you have been added and cannot get in, ask them.</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0', color: T.subtle, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>
+                <span style={{ flex: 1, height: 1, background: T.line }} />or<span style={{ flex: 1, height: 1, background: T.line }} />
+              </div>
+              <Btn type="button" tone="subtle" disabled={busy} onClick={withGoogle} style={{ width: '100%', padding: '10px 14px', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                <GoogleMark />Continue with Google
+              </Btn>
+              <div style={{ fontSize: 11.5, color: T.subtle, marginTop: 14, lineHeight: 1.5 }}>Your desk's supervisor puts you on the desk; Vacancy does not. Signing in with Google works for the address they added — no password, no code. If you have been added and cannot get in, ask them.</div>
             </form>
           ) : (
             <form onSubmit={e => { e.preventDefault(); verify(); }}>
@@ -149,6 +165,17 @@ export function SignIn({ onSignedIn }: { onSignedIn: (access: Access) => void })
         </div>
       </div>
     </div>
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" style={{ display: 'block' }}>
+      <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z" />
+      <path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z" />
+      <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z" />
+    </svg>
   );
 }
 

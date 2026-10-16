@@ -26,7 +26,7 @@ import {
   AVAILABILITY, CONTACT_CLASS, CONTACT_PRIORITY, COVERAGE, FACILITY_KIND, FACILITY_STATUS, GPS_METHOD, HOURS,
   INSTITUTION_STATUS, STATED_BY, VERIFICATION, emergencyApi,
   type CapabilityClaim, type ContactRow, type DirectoryOverview, type FacilityDetail, type FacilityRow,
-  type InstitutionDetail, type InstitutionRow, type SaveContact, type SaveFacility, type SaveInstitution, type UnitRow,
+  type InstitutionDetail, type InstitutionRow, type NationalResult, type NationalStatus, type SaveContact, type SaveFacility, type SaveInstitution, type UnitRow,
 } from '../api/emergency';
 import type { AdminIdentity } from '../api/admin';
 
@@ -146,6 +146,9 @@ export function EmergencyDirectory({ identity }: { identity: AdminIdentity }) {
         />
       </div>
 
+      <SectorStrip sectors={overview.sectors} active={sector} onPick={setSector} />
+      {canEdit ? <NationalCard onLoaded={() => { search(); loadOverview(); }} push={push} /> : null}
+
       <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'minmax(300px, 380px) minmax(0, 1fr)', alignItems: 'start' }}>
         <Card pad={0}>
           <div style={{ padding: 12, borderBottom: `1px solid ${t.border}`, display: 'grid', gap: 8 }}>
@@ -183,12 +186,15 @@ export function EmergencyDirectory({ identity }: { identity: AdminIdentity }) {
                     <span style={{ fontSize: 13.5, fontWeight: 700, color: t.text }}>{row.name}</span>
                     {row.shortName ? <span style={{ fontSize: 11.5, color: t.textSubtle }}>{row.shortName}</span> : null}
                     {row.national ? <Pill tone="info">National</Pill> : null}
+                    {row.oversight ? <Pill tone="warning">Ministry</Pill> : null}
                     {row.status !== 2 ? <Pill tone={row.status === 1 ? 'neutral' : 'danger'}>{INSTITUTION_STATUS[row.status]}</Pill> : null}
                   </div>
                   <div style={{ fontSize: 11.5, color: t.textMuted, marginTop: 3 }}>
                     {row.sectorName}{row.typeName ? ` · ${row.typeName}` : ''} · {row.facilities} {row.facilities === 1 ? 'facility' : 'facilities'} · {row.contacts} contacts
                     {row.contactsNeedingVerification ? <span style={{ color: t.warning, fontWeight: 700 }}> · {row.contactsNeedingVerification} to ring</span> : null}
                   </div>
+                  {row.overseerName ? <div style={{ fontSize: 11.5, color: t.textSubtle, marginTop: 2 }}>Answers to {row.overseerName}</div> : null}
+                  {row.oversight ? <div style={{ fontSize: 11.5, color: t.textSubtle, marginTop: 2 }}>{row.overseen ?? 0} {(row.overseen ?? 0) === 1 ? 'institution answers' : 'institutions answer'} to it</div> : null}
                 </button>
               ))}
               <div style={{ padding: '8px 14px', fontSize: 11.5, color: t.textSubtle }}>{total} in the directory</div>
@@ -249,6 +255,112 @@ export function asChart(rows: FacilityRow[]): { row: FacilityRow; depth: number 
   return out;
 }
 
+/**
+ * Every sector a citizen can pick, with what the directory holds for it. A sector with nothing in
+ * it is shown, not hidden: that is the gap between what the web and the phone offer and what
+ * has been recorded here.
+ */
+function SectorStrip({ sectors, active, onPick }: { sectors: DirectoryOverview['sectors']; active: string; onPick: (id: string) => void }) {
+  const { t } = useTheme();
+  const shown = sectors.filter(x => x.active);
+  const empty = shown.filter(x => x.institutions === 0);
+  return (
+    <div style={{ marginBottom: 16 }} data-sector-strip>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => onPick('')} aria-pressed={active === ''} style={chipStyle(t, active === '', false)}>Every sector</button>
+        {shown.map(x => (
+          <button key={x.id} type="button" onClick={() => onPick(active === x.id ? '' : x.id)} aria-pressed={active === x.id} style={chipStyle(t, active === x.id, x.institutions === 0)} data-sector={x.code}>
+            <span style={{ fontWeight: 700 }}>{x.name}</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.8 }}>{x.institutions === 0 ? 'none yet' : x.institutions}</span>
+          </button>
+        ))}
+      </div>
+      {empty.length ? (
+        <div style={{ fontSize: 12, color: t.warning, marginTop: 8, lineHeight: 1.55 }}>
+          {empty.length === 1 ? 'One sector shows on the web and phone with nothing behind it:' : `${empty.length} sectors show on the web and phone with nothing behind them:`} {empty.map(x => x.name).join(', ')}. A citizen who picks one finds an empty page.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function chipStyle(t: ReturnType<typeof useTheme>['t'], on: boolean, empty: boolean): CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5,
+    border: `1px solid ${on ? t.brand : empty ? t.warning : t.borderStrong}`, background: on ? t.brandSoft : 'transparent', color: empty && !on ? t.warning : t.text,
+  };
+}
+
+/**
+ * The circulated Sierra Leone contact list — general lines, the police divisions, the fire force —
+ * loaded in one press. Safe to repeat: it adds what is missing, matches what is there, and leaves
+ * anything already typed or verified exactly as it is. Nothing it adds is marked verified.
+ */
+function NationalCard({ onLoaded, push }: { onLoaded: () => void; push: (message: string, tone?: 'error') => void }) {
+  const { t } = useTheme();
+  const [status, setStatus] = useState<NationalStatus | null>(null);
+  const [result, setResult] = useState<NationalResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const refresh = useCallback(() => { emergencyApi.nationalStatus().then(setStatus).catch(() => setStatus(null)); }, []);
+  useEffect(refresh, [refresh]);
+  if (!status) return null;
+  const missing = (status.institutions - status.institutionsPresent) + (status.stations - status.stationsPresent) + (status.contacts - status.contactsPresent);
+  const load = () => {
+    setBusy(true);
+    emergencyApi.nationalLoad()
+      .then(r => { setResult(r); push(`Loaded: ${r.institutionsCreated} institutions, ${r.stationsCreated} stations, ${r.contactsCreated} numbers.`); onLoaded(); refresh(); })
+      .catch((caught: unknown) => push(err(caught, 'The national list did not load.'), 'error'))
+      .finally(() => setBusy(false));
+  };
+  const part = (label: string, have: number, all: number) => (
+    <div style={{ minWidth: 120 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: t.textSubtle, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: have >= all ? t.success : t.text, fontVariantNumeric: 'tabular-nums' }}>{have}<span style={{ color: t.textSubtle, fontWeight: 600 }}> / {all}</span></div>
+    </div>
+  );
+  return (
+    <div style={{ marginBottom: 16 }} data-national-card>
+      <Card pad={16}>
+        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ flex: 1, minWidth: 260 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: t.text }}>Sierra Leone national emergency list</div>
+            <div style={{ fontSize: 12.5, color: t.textMuted, lineHeight: 1.6, marginTop: 4, maxWidth: 560 }}>
+              {status.source}. {missing === 0
+                ? 'Everything on the list is in the directory.'
+                : `${missing} ${missing === 1 ? 'entry is' : 'entries are'} not in the directory yet. Loading adds only those; it never changes a number somebody typed or verified.`}
+            </div>
+          </div>
+          {part('Institutions', status.institutionsPresent, status.institutions)}
+          {part('Stations', status.stationsPresent, status.stations)}
+          {part('Numbers', status.contactsPresent, status.contacts)}
+          <Button tone="primary" disabled={busy || missing === 0} onClick={load}>{busy ? 'Loading…' : missing === 0 ? 'All loaded' : 'Load the national list'}</Button>
+        </div>
+        {status.blockers.length ? <div style={{ marginTop: 10 }}><ErrorNote message={status.blockers.join(' ')} /></div> : null}
+        {result ? (
+          <div style={{ marginTop: 14, borderTop: `1px solid ${t.border}`, paddingTop: 12 }}>
+            <div style={{ fontSize: 12.5, color: t.text, fontWeight: 700 }}>
+              Added {result.institutionsCreated} institutions, {result.stationsCreated} stations and {result.contactsCreated} numbers; {result.contactsSkipped} numbers were already there.
+              None of it is marked verified: ring each number before you do.
+            </div>
+            <div style={{ marginTop: 8, display: 'grid', gap: 3 }}>
+              {result.lines.map(l => (
+                <div key={l.institution} style={{ fontSize: 12, color: t.textMuted }}>
+                  <strong style={{ color: t.text }}>{l.institution}</strong>{l.institutionCreated ? ' · new' : ''}{l.oversight ? ' · ministry' : ''} — {l.stationsCreated} stations added, {l.stationsMatched} matched, {l.contactsCreated} numbers added
+                </div>
+              ))}
+            </div>
+            {result.notes.length ? (
+              <ul style={{ margin: '10px 0 0', paddingLeft: 18, display: 'grid', gap: 4 }}>
+                {result.notes.map((n, i) => <li key={i} style={{ fontSize: 12, color: t.warning, lineHeight: 1.5 }}>{n}</li>)}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </Card>
+    </div>
+  );
+}
+
 function Stat({ label, value, detail, tone, to }: { label: string; value: number; detail: string; tone?: 'warning' | 'success'; to?: string }) {
   const { t } = useTheme();
   const colour = tone === 'warning' ? t.warning : tone === 'success' ? t.success : t.text;
@@ -296,7 +408,9 @@ function InstitutionPanel({ detail, overview, canEdit, onChanged, onArchived, pu
               {row.verified ? <Pill tone="success">Verified</Pill> : <Pill tone="warning">Unverified</Pill>}
               {row.national ? <Pill tone="info">National</Pill> : null}
               {row.government ? <Pill tone="neutral">Government</Pill> : null}
+              {row.oversight ? <Pill tone="warning">Ministry</Pill> : null}
             </div>
+            {row.overseerName ? <div style={{ fontSize: 12, color: t.textSubtle, marginTop: 4 }}>Answers to {row.overseerName}</div> : null}
             <div style={{ fontSize: 12.5, color: t.textMuted, marginTop: 5 }}>
               {row.sectorName}{row.typeName ? ` · ${row.typeName}` : ''}{row.headOfficeText ? ` · ${row.headOfficeText}` : ''}
               {row.publicPhone ? <> · public line <strong style={{ color: t.text }}>{row.publicPhone}</strong></> : null}
@@ -434,7 +548,12 @@ export function InstitutionDialog({ overview, existing, onClose, onDone }: {
     typeId: row?.typeId ?? '', government: row?.government ?? true, national: row?.national ?? false, status: row?.status ?? 1,
     headOfficeText: row?.headOfficeText ?? '', publicPhone: row?.publicPhone ?? '', alternativePhone: existing?.alternativePhone ?? '',
     email: existing?.email ?? '', website: existing?.website ?? '', description: existing?.description ?? '',
+    oversight: row?.oversight ?? false, overseerId: row?.overseerId ?? null,
   });
+  const [ministries, setMinistries] = useState<InstitutionRow[]>([]);
+  useEffect(() => {
+    emergencyApi.searchInstitutions({ pageSize: 100 }).then(page => setMinistries(page.items.filter(i => i.oversight && i.id !== row?.id))).catch(() => setMinistries([]));
+  }, [row?.id]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof SaveInstitution>(key: K, value: SaveInstitution[K]) => setForm(prev => ({ ...prev, [key]: value }));
@@ -478,6 +597,13 @@ export function InstitutionDialog({ overview, existing, onClose, onDone }: {
       </Two>
       <Check checked={form.government} onChange={v => set('government', v)} label="A government institution" />
       <Check checked={form.national} onChange={v => set('national', v)} label="Answers for the whole country — shown to everybody, everywhere, first" />
+      <Check checked={!!form.oversight} onChange={v => set('oversight', v)} label="A ministry or oversight body — has no stations, and sees (read-only) every institution that answers to it" />
+      <Field label="Answers to" hint="File this institution under a ministry. Whoever is appointed at the ministry sees its reports, response times and recommendations — and cannot act on them.">
+        <Select value={form.overseerId ?? ''} onChange={v => set('overseerId', v || null)}>
+          <option value="">No ministry</option>
+          {ministries.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </Select>
+      </Field>
       <Two>
         <Field label="Public line" hint="The one number a citizen sees on the institution itself."><Input value={form.publicPhone ?? ''} onChange={v => set('publicPhone', v)} placeholder="019" /></Field>
         <Field label="Alternative"><Input value={form.alternativePhone ?? ''} onChange={v => set('alternativePhone', v)} /></Field>

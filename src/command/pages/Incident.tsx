@@ -17,6 +17,7 @@ import { T, severityTone } from '../theme';
 import { Actions, Btn, Check, Eyebrow, Field, Input, Modal, Pill, Select, SeverityMark, Textarea, Toasts, age, fmtDateTime, useToasts } from '../ui';
 import { useCommand } from '../useCommand';
 import { IncidentMap } from '../IncidentMap';
+import { AgenciesPanel, AgencyButtons, RoleBanner, useAgencyActions } from './Agencies';
 
 type Dialog = 'severity' | 'note' | 'progress' | 'resolve' | 'escalate' | 'reroute' | 'duplicate' | 'close' | 'location' | 'assign' | null;
 
@@ -62,6 +63,10 @@ export function IncidentPanel({ inc, onChanged, push, wide }: { inc: DeskInciden
   const responding = RESPONDING_STATUSES.includes(card.status);
   const assignments = inc.assignments ?? [];
   const going = assignments.filter(a => LIVE_ASSIGNMENT.includes(a.status));
+  const navigate = useNavigate();
+  const agency = useAgencyActions(inc, onChanged, push, () => navigate('/queue'));
+  // Only the lead agency moves the case; an agency brought in writes on it and sends its own people.
+  const lead = !!inc.canHandOver || inc.myRole === 'national';
 
   const run = (work: Promise<DeskIncident>, message: string) => {
     setBusy(true);
@@ -90,21 +95,24 @@ export function IncidentPanel({ inc, onChanged, push, wide }: { inc: DeskInciden
         </div>
       </div>
 
+      <RoleBanner inc={inc} busy={agency.busy} onAccept={() => agency.answer(true)} onDecline={() => agency.answer(false)} />
+
       {inc.canAct && open ? (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-          {card.unowned || card.status === 1 || card.status === 4 ? <Btn size="sm" tone="primary" disabled={busy} onClick={() => run(commandApi.acknowledge(id), 'Acknowledged.')}>Acknowledge</Btn> : null}
+          {lead && (card.unowned || card.status === 1 || card.status === 4) ? <Btn size="sm" tone="primary" disabled={busy} onClick={() => run(commandApi.acknowledge(id), 'Acknowledged.')}>Acknowledge</Btn> : null}
           {card.status !== 5 ? <Btn size="sm" tone="accent" disabled={busy} onClick={() => setDialog('assign')}>Send somebody</Btn> : null}
-          {card.status !== 3 && card.status !== 5 && !responding ? <Btn size="sm" disabled={busy} onClick={() => setDialog('progress')}>Being handled</Btn> : null}
-          {card.status !== 5 ? <Btn size="sm" disabled={busy} onClick={() => setDialog('resolve')}>Resolved</Btn> : null}
+          {lead && card.status !== 3 && card.status !== 5 && !responding ? <Btn size="sm" disabled={busy} onClick={() => setDialog('progress')}>Being handled</Btn> : null}
+          {lead && card.status !== 5 ? <Btn size="sm" disabled={busy} onClick={() => setDialog('resolve')}>Resolved</Btn> : null}
           <Btn size="sm" disabled={busy} onClick={() => setDialog('severity')}>Severity</Btn>
           <Btn size="sm" disabled={busy} onClick={() => setDialog('note')}>Note</Btn>
           <Btn size="sm" disabled={busy} onClick={() => setDialog('location')}>Location</Btn>
-          <Btn size="sm" disabled={busy} onClick={() => setDialog('reroute')}>Route elsewhere</Btn>
+          {lead ? <Btn size="sm" disabled={busy} onClick={() => setDialog('reroute')}>Route elsewhere</Btn> : null}
           <Btn size="sm" disabled={busy} onClick={() => setDialog('escalate')}>Escalate</Btn>
-          {inc.possibleDuplicates.length > 0 ? <Btn size="sm" disabled={busy} onClick={() => setDialog('duplicate')}>Duplicate</Btn> : null}
-          <Btn size="sm" tone="danger" disabled={busy} onClick={() => setDialog('close')}>Close</Btn>
+          <AgencyButtons inc={inc} busy={agency.busy} onOpen={which => (which === 'bring' ? agency.openBring() : agency.openHand())} />
+          {lead && inc.possibleDuplicates.length > 0 ? <Btn size="sm" disabled={busy} onClick={() => setDialog('duplicate')}>Duplicate</Btn> : null}
+          {lead ? <Btn size="sm" tone="danger" disabled={busy} onClick={() => setDialog('close')}>Close</Btn> : null}
         </div>
-      ) : !inc.canAct && open ? <div style={{ fontSize: 12, color: T.muted, marginBottom: 12, padding: '6px 10px', background: T.surface2, borderRadius: 7 }}>On another desk — you can read it; they act on it.</div> : null}
+      ) : !inc.canAct && open && !inc.pendingReferralId ? <div style={{ fontSize: 12, color: T.muted, marginBottom: 12, padding: '6px 10px', background: T.surface2, borderRadius: 7 }}>{inc.myRole === 'following' ? 'You handed this on — you can read it; the desk that took it acts on it.' : 'On another desk — you can read it; they act on it.'}</div> : null}
 
       {inc.latitude !== null && inc.longitude !== null ? <WhereMap inc={inc} wide={!!wide} push={push} /> : null}
 
@@ -141,6 +149,7 @@ export function IncidentPanel({ inc, onChanged, push, wide }: { inc: DeskInciden
             {inc.outcome ? <Fact label="Outcome" value={`${OUTCOME[inc.outcome]}${inc.outcomeNote ? ` — ${inc.outcomeNote}` : ''}`} /> : null}
             {inc.masterIncidentNumber ? <Fact label="Folded into" value={inc.masterIncidentNumber} /> : null}
           </Facts>
+          <AgenciesPanel rows={inc.agencies ?? []} busy={agency.busy} onWithdraw={agency.withdraw} onAccept={row => agency.answer(true, row)} onDecline={row => agency.answer(false, row)} />
           {inc.evidence && inc.evidence.length > 0 ? <Facts title={`Attached · ${inc.evidence.length}`}>{inc.evidence.map(row => <EvidenceLine key={row.id} incidentId={id} row={row} />)}</Facts> : null}
           {assignments.length > 0 ? (
             <Facts title={going.length > 0 ? `Who is going · ${going.length}` : 'Who was sent'}>
@@ -178,6 +187,7 @@ export function IncidentPanel({ inc, onChanged, push, wide }: { inc: DeskInciden
         </div>
       </div>
 
+      {agency.dialogs}
       {dialog === 'severity' ? <ChoiceDialog title="Change severity" options={Object.entries(SEVERITY).map(([v, l]) => [Number(v), l] as [number, string])} current={card.severity} reasonLabel="Why" verb="Change" onClose={() => setDialog(null)} onSave={(v, reason) => run(commandApi.severity(id, v, reason), 'Severity changed.')} /> : null}
       {dialog === 'note' ? <NoteDialog id={id} onClose={() => setDialog(null)} run={run} /> : null}
       {dialog === 'progress' ? <ReasonDialog title="Being handled" hint="What is happening — a unit told, a vehicle sent, a call made. The reporter reads this." verb="Mark being handled" required={false} onClose={() => setDialog(null)} onSave={note => run(commandApi.status(id, 3, note), 'Being handled.')} /> : null}

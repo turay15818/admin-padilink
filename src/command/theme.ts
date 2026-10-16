@@ -77,7 +77,16 @@ export const GLOBAL_CSS = `
   @keyframes cc-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
   .cc-drawer { animation: cc-drawer .2s ease-out; }
   @keyframes cc-drawer { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { .cc-pulse, .cc-blink, .cc-in, .cc-drawer { animation: none; } }
+  .cc-edge { position: fixed; inset: 0; z-index: 80; pointer-events: none; }
+  .cc-edge-critical { border: 4px solid ${T.bad}; box-shadow: inset 0 0 90px 10px rgba(255,77,94,.55); animation: cc-edge 0.9s ease-in-out infinite alternate; }
+  .cc-edge-high { border: 3px solid ${T.warn}; box-shadow: inset 0 0 60px 4px rgba(255,176,32,.4); animation: cc-edge 1.6s ease-in-out infinite alternate; }
+  .cc-edge-new { border: 2px solid ${T.accent}; box-shadow: inset 0 0 40px 0 rgba(34,211,238,.25); animation: cc-edge 2.2s ease-in-out infinite alternate; }
+  @keyframes cc-edge { from { opacity: .25; } to { opacity: 1; } }
+  .cc-alarm-card { animation: cc-in .18s ease-out; }
+  .cc-alarm-card-critical { animation: cc-alarm-shake .5s ease-out 1, cc-alarm-glow 1.1s ease-in-out infinite alternate; }
+  @keyframes cc-alarm-shake { 0% { transform: translateX(0); } 20% { transform: translateX(-8px); } 40% { transform: translateX(7px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } 100% { transform: none; } }
+  @keyframes cc-alarm-glow { from { filter: none; } to { filter: drop-shadow(0 0 14px rgba(255,77,94,.7)); } }
+  @media (prefers-reduced-motion: reduce) { .cc-pulse, .cc-blink, .cc-in, .cc-drawer, .cc-alarm-card, .cc-alarm-card-critical { animation: none; } .cc-edge { animation: none !important; opacity: 1; } }
   .maplibregl-ctrl-group { background: ${T.surface2} !important; border: 1px solid ${T.line2} !important; box-shadow: none !important; }
   .maplibregl-ctrl-group button + button { border-top: 1px solid ${T.line} !important; }
   .maplibregl-ctrl button .maplibregl-ctrl-icon { filter: invert(.85); }

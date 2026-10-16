@@ -7,7 +7,7 @@
  * follows the room — every hub nudge refetches — and the filters are in the URL so a
  * bookmark to "unowned" is a bookmark to "unowned".
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CATEGORY, INCIDENT_STATUS, commandApi, errorWords, isOpen, type DispatchQueue, type QueueCard } from '../api';
 import { T } from '../theme';
@@ -15,7 +15,15 @@ import { Btn, Drawer, Empty, ErrorLine, Input, Loading, Pill, Segmented, Severit
 import { useCommand } from '../useCommand';
 import { IncidentPanel, useIncident } from './Incident';
 
-type Filter = 'all' | 'unowned' | 'p1' | 'responding' | 'escalated' | 'closed';
+type Filter = 'all' | 'unowned' | 'asked' | 'p1' | 'responding' | 'escalated' | 'closed';
+
+/** This desk leads the case — the only desk for which "nobody owns it" is its own problem. */
+const leads = (c: QueueCard) => !c.role || c.role === 'lead';
+/** Short words for the part this desk plays on a case it does not lead. */
+const ROLE_CHIP: Record<string, { label: string; tone: 'warn' | 'info' | 'accent' | 'good' | 'neutral' }> = {
+  asked: { label: 'Asked of you', tone: 'warn' }, 'brought-in': { label: 'Brought in', tone: 'accent' }, helping: { label: 'Helping', tone: 'accent' },
+  following: { label: 'Following', tone: 'neutral' }, oversight: { label: 'Oversight', tone: 'info' },
+};
 
 export function Queue() {
   const { tick, districtName } = useCommand();
@@ -41,13 +49,14 @@ export function Queue() {
     const needle = search.trim().toLowerCase();
     const picked = cards.filter(c =>
       (filter === 'all' ? isOpen(c.status)
-        : filter === 'unowned' ? c.unowned && isOpen(c.status)
+        : filter === 'unowned' ? c.unowned && leads(c) && isOpen(c.status)
+        : filter === 'asked' ? c.role === 'asked' && isOpen(c.status)
         : filter === 'p1' ? c.severity === 1 && isOpen(c.status)
         : filter === 'responding' ? [9, 10, 11].includes(c.status)
         : filter === 'escalated' ? c.escalationLevel > 0 && isOpen(c.status)
         : !isOpen(c.status))
       && (!needle || `${c.number} ${c.situationWords} ${c.community ?? ''} ${c.landmark ?? ''} ${c.facilityName ?? ''} ${districtName(c.districtSlug)}`.toLowerCase().includes(needle)));
-    return picked.sort((a, b) => (Number(b.unowned) - Number(a.unowned)) || (a.severity - b.severity) || (b.ageMinutes - a.ageMinutes));
+    return picked.sort((a, b) => (Number(b.role === 'asked') - Number(a.role === 'asked')) || (Number(b.unowned && leads(b)) - Number(a.unowned && leads(a))) || (a.severity - b.severity) || (b.ageMinutes - a.ageMinutes));
   }, [queue, filter, search, districtName]);
 
   const setFilter = (f: Filter) => { const next = new URLSearchParams(params); if (f === 'all') next.delete('filter'); else next.set('filter', f); setParams(next, { replace: true }); };
@@ -55,14 +64,14 @@ export function Queue() {
 
   const counts = useMemo(() => {
     const cards = queue?.cards ?? [];
-    return { all: cards.filter(c => isOpen(c.status)).length, unowned: cards.filter(c => c.unowned && isOpen(c.status)).length, p1: cards.filter(c => c.severity === 1 && isOpen(c.status)).length, responding: cards.filter(c => [9, 10, 11].includes(c.status)).length, escalated: cards.filter(c => c.escalationLevel > 0 && isOpen(c.status)).length };
+    return { all: cards.filter(c => isOpen(c.status)).length, unowned: cards.filter(c => c.unowned && leads(c) && isOpen(c.status)).length, asked: cards.filter(c => c.role === 'asked' && isOpen(c.status)).length, p1: cards.filter(c => c.severity === 1 && isOpen(c.status)).length, responding: cards.filter(c => [9, 10, 11].includes(c.status)).length, escalated: cards.filter(c => c.escalationLevel > 0 && isOpen(c.status)).length };
   }, [queue]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, flex: 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <Segmented value={filter} onChange={setFilter} options={[
-          ['all', <>Open <Count n={counts.all} /></>], ['unowned', <>Unowned <Count n={counts.unowned} tone={T.warn} /></>], ['p1', <>P1 <Count n={counts.p1} tone={T.bad} /></>],
+          ['all', <>Open <Count n={counts.all} /></>], ['unowned', <>Unowned <Count n={counts.unowned} tone={T.warn} /></>], ...(counts.asked > 0 || filter === 'asked' ? [['asked', <>Asked of you <Count n={counts.asked} tone={T.warn} /></>] as [Filter, ReactNode]] : []), ['p1', <>P1 <Count n={counts.p1} tone={T.bad} /></>],
           ['responding', <>Responding <Count n={counts.responding} tone={T.good} /></>], ['escalated', <>Escalated <Count n={counts.escalated} tone={T.bad} /></>], ['closed', 'Closed'],
         ]} />
         <span style={{ flex: 1 }} />
@@ -105,8 +114,8 @@ function Row({ c, active, onOpen, districtName }: { c: QueueCard; active: boolea
       <Td><div style={{ fontWeight: 500 }}>{c.situationWords}</div><div style={{ fontSize: 11, color: T.subtle }}>{CATEGORY[c.category]}{c.peopleAffected ? ` · ${c.peopleAffected} people` : ''}{c.isTraining ? ' · training' : ''}</div></Td>
       <Td><div>{districtName(c.districtSlug)}</div><div style={{ fontSize: 11, color: T.subtle, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[c.community, c.landmark].filter(Boolean).join(' · ') || (c.hasPin ? 'pin only' : 'no pin')}</div></Td>
       <Td muted>{c.facilityName ?? <span style={{ color: T.warn }}>unrouted</span>}</Td>
-      <Td><Pill tone={tone}>{INCIDENT_STATUS[c.status]}</Pill>{c.escalationLevel > 0 ? <Pill tone="bad"> L{c.escalationLevel}</Pill> : null}</Td>
-      <Td>{c.unowned ? <span style={{ color: T.warn, fontWeight: 600 }}>nobody</span> : <span style={{ color: T.muted }}>{c.dispatcherName}</span>}</Td>
+      <Td><Pill tone={tone}>{INCIDENT_STATUS[c.status]}</Pill>{c.escalationLevel > 0 ? <Pill tone="bad"> L{c.escalationLevel}</Pill> : null}{c.role && ROLE_CHIP[c.role] ? <> <Pill tone={ROLE_CHIP[c.role].tone}>{ROLE_CHIP[c.role].label}</Pill></> : null}{(c.agencies ?? 0) > 0 && leads(c) ? <> <Pill tone="info" mono>+{c.agencies} agenc{c.agencies === 1 ? 'y' : 'ies'}</Pill></> : null}</Td>
+      <Td>{!leads(c) ? <span style={{ color: T.muted }}>{c.institutionName ?? 'lead agency'}</span> : c.unowned ? <span style={{ color: T.warn, fontWeight: 600 }}>nobody</span> : <span style={{ color: T.muted }}>{c.dispatcherName}</span>}</Td>
       <Td right mono style={{ color: c.unowned && c.ageMinutes > 10 ? T.bad : undefined }}>{age(c.ageMinutes)}</Td>
     </tr>
   );

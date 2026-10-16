@@ -41,6 +41,10 @@ export type InstitutionRow = {
   publicPhone: string | null; headOfficeText: string | null;
   facilities: number; contacts: number; contactsNeedingVerification: number;
   updatedAt: string | null;
+  /** A ministry or oversight body: no stations of its own, sees (read-only) every institution under it. */
+  oversight?: boolean; overseerId?: string | null; overseerName?: string | null;
+  /** How many institutions answer to this one directly. */
+  overseen?: number;
 };
 
 export type InstitutionPage = { items: InstitutionRow[]; total: number; page: number; pageSize: number };
@@ -51,6 +55,7 @@ export type SaveInstitution = {
   headOfficePlaceId?: string | null; headOfficeText?: string | null;
   publicPhone?: string | null; alternativePhone?: string | null; email?: string | null; website?: string | null;
   description?: string | null; logoUrl?: string | null;
+  oversight?: boolean; overseerId?: string | null;
 };
 
 export type InstitutionDetail = {
@@ -161,6 +166,17 @@ export type SituationRow = { id: string; code: string; sectorId: string; sectorC
 export type SaveSituation = { id?: string | null; sectorId: string; code?: string | null; words: string; severity: number; capability?: string | null; alsoSectorCode?: string | null; sensitive: boolean; sort: number; active: boolean };
 export const SEVERITY_WORDS: Record<number, string> = { 1: 'Critical', 2: 'Serious', 3: 'Urgent', 4: 'Low', 5: 'Information' };
 
+/** The Sierra Leone emergency contact list: what it holds and how much of it is already in the directory. */
+export type NationalStatus = {
+  institutions: number; institutionsPresent: number; stations: number; stationsPresent: number; contacts: number; contactsPresent: number;
+  blockers: string[]; source: string;
+};
+export type NationalLine = { institution: string; institutionCreated: boolean; oversight: boolean; stationsCreated: number; stationsMatched: number; contactsCreated: number; contactsSkipped: number };
+export type NationalResult = {
+  institutionsCreated: number; institutionsMatched: number; stationsCreated: number; stationsMatched: number; contactsCreated: number; contactsSkipped: number;
+  lines: NationalLine[]; notes: string[];
+};
+
 export type IssueCode = { sectorId: string; institutionId?: string | null; label?: string | null; grant?: number; maxUses?: number; expiresInDays?: number | null; note?: string | null };
 
 export const emergencyApi = {
@@ -168,6 +184,9 @@ export const emergencyApi = {
   saveSector: (body: Partial<SectorRow> & { name: string; code: string }) => securePost<SectorRow>(`${BASE}/sectors/save`, body),
   removeSector: (body: SectorRow) => securePost<SectorRow>(`${BASE}/sectors/save`, { ...body, active: false }),
   /** Sample places: thirty per category to look at, and one call to remove every one of them. */
+  /** The circulated national list: how much is here, and one press to load the rest (safe to repeat). */
+  nationalStatus: () => securePost<NationalStatus>(`${BASE}/national/status`, {}),
+  nationalLoad: () => securePost<NationalResult>(`${BASE}/national/load`, {}),
   sampleStatus: () => securePost<SampleSummary>(`${BASE}/sample/status`, {}),
   sampleSeed: () => securePost<SampleSummary>(`${BASE}/sample/seed`, {}),
   samplePurge: () => securePost<SampleSummary>(`${BASE}/sample/purge`, {}),
@@ -227,6 +246,14 @@ export type QueueCard = {
   landmark: string | null; hasPin: boolean; reportedAt: string; ageMinutes: number;
   facilityName: string | null; institutionName: string | null; dispatcherName: string | null; unowned: boolean;
   escalationLevel: number; peopleAffected: number | null;
+  /** What this desk is on the case: lead · asked · brought-in · helping · following · oversight · national. */
+  role?: string | null;
+  /** Agencies on the case beyond the lead, still live. */
+  agencies?: number;
+  /** How loud this desk's room gets for it: 0 silent · 1 chime · 2 urgent · 3 siren. The institution's own rules decide. */
+  alarm?: number;
+  /** One sentence: why it is that loud. */
+  alarmWhy?: string | null;
 };
 
 export type DispatchQueue = { cards: QueueCard[]; desk: string; national: boolean; unowned: number; p1Open: number; asOf: string };
@@ -265,6 +292,45 @@ export type DeskIncident = {
   facilityLatitude?: number | null;
   facilityLongitude?: number | null;
   distanceFromFacilityKm?: number | null;
+  /** Every agency handed this case or brought in, with what each said. Oldest first. */
+  agencies?: AgencyRow[] | null;
+  myRole?: string | null;
+  canHandOver?: boolean;
+  canBringIn?: boolean;
+  /** A referral to this desk that is waiting for its answer. */
+  pendingReferralId?: string | null;
+};
+
+/* ---------- more than one agency on a case ---------- */
+
+export type AgencyRow = {
+  referralId: string;
+  /** 1 handed over · 2 brought in. */
+  kind: number;
+  /** 1 pending · 2 accepted · 3 declined · 4 withdrawn · 5 completed. */
+  status: number;
+  institutionId: string; institutionName: string; shortName: string | null; sectorCode: string; sectorName: string; oversight: boolean;
+  facilityId: string | null; facilityName: string | null; fromName: string | null; message: string | null; responseNote: string | null;
+  referredAt: string; respondedAt: string | null; endedAt: string | null; waitedMinutes: number;
+  referredBy: string | null; respondedBy: string | null;
+  /** This desk is the one it was sent to, and it is still waiting. */
+  mine: boolean;
+  canWithdraw: boolean;
+};
+export type AgencyPlace = { facilityId: string; name: string; districtSlug: string | null; distanceKm: number | null };
+export type AgencyOption = {
+  institutionId: string; name: string; shortName: string | null; sectorCode: string; sectorName: string; oversight: boolean;
+  suggested: boolean; why: string | null; alreadyIn: boolean; places: AgencyPlace[];
+};
+export type AgencyDirectory = { options: AgencyOption[] };
+export type AgencyTarget = { institutionId: string; facilityId?: string | null };
+export type ReferralOutcome = { message: string; incident: DeskIncident | null };
+export const REFERRAL_STATUS: Record<number, string> = { 1: 'Waiting', 2: 'Accepted', 3: 'Declined', 4: 'Taken back', 5: 'Done' };
+export const REFERRAL_KIND: Record<number, string> = { 1: 'Handed over', 2: 'Brought in' };
+/** The desk's part on a case, in words. */
+export const ROLE_ON_CASE: Record<string, string> = {
+  lead: 'You lead this case', asked: 'Waiting for your answer', 'brought-in': 'You were brought in', helping: 'You are helping',
+  following: 'You are following this case', oversight: 'Oversight', national: 'National desk',
 };
 
 export type TrailPoint = { latitude: number; longitude: number; accuracyMetres: number | null; at: string };
@@ -506,7 +572,7 @@ export type AnalyticsRequest = {
   from?: string | null; to?: string | null; days?: number; granularity?: 'day' | 'week' | 'month' | null;
   institutionId?: string | null; facilityId?: string | null; sectorCode?: string | null; districtSlug?: string | null; category?: number | null; severity?: number | null; compare?: boolean;
 };
-export type AnalyticsWindow = { from: string; to: string; days: number; granularity: 'day' | 'week' | 'month'; compareFrom: string | null; compareTo: string | null; scope: string; national: boolean; filters: string };
+export type AnalyticsWindow = { from: string; to: string; days: number; granularity: 'day' | 'week' | 'month'; compareFrom: string | null; compareTo: string | null; scope: string; national: boolean; filters: string; institutions?: number };
 export type Headline = {
   reported: number; reportedBefore: number; resolved: number; resolvedBefore: number; critical: number; criticalBefore: number; serious: number;
   unrouted: number; unroutedBefore: number; stillOpen: number; duplicates: number; mistakenOrMalicious: number; referred: number;
@@ -526,10 +592,19 @@ export type CategoryAnalytics = { category: number; label: string; reported: num
 export type SourceCount = { source: number; label: string; count: number; before: number };
 export type SituationCount = { code: string; words: string; category: number; count: number; critical: number; medianAckMinutes: number | null };
 export type Finding = { kind: string; text: string; figure: string | null; tone: 'good' | 'neutral' | 'warn' | 'bad' };
+/** A province, rolled up from its districts. */
+export type RegionAnalytics = { province: string; districts: number; reported: number; reportedBefore: number; critical: number; unrouted: number; resolved: number; stillOpen: number; medianAckMinutes: number | null; medianSceneMinutes: number | null; byCategory: number[] };
+/** One institution against the others — the ministry's league table. */
+export type InstitutionAnalytics = { institutionId: string; name: string; shortName: string | null; sectorCode: string; sectorName: string; reported: number; reportedBefore: number; critical: number; resolved: number; stillOpen: number; unrouted: number; medianAckMinutes: number | null; medianSceneMinutes: number | null; acknowledgedWithinTenPct: number | null; byCategory: number[] };
+/** A station against the kinds of case it answered. */
+export type MatrixRow = { facilityId: string; name: string; districtSlug: string | null; total: number; byCategory: number[] };
+/** Something to do, with the figure that says why. */
+export type Recommendation = { kind: string; priority: 'now' | 'soon' | 'watch'; headline: string; detail: string; figure: string | null; districtSlug?: string | null; facilityId?: string | null; institutionId?: string | null };
 export type AnalyticsReport = {
   window: AnalyticsWindow; headline: Headline; series: TrendPoint[]; seriesBefore: TrendPoint[]; heatmap: HeatCell[]; districts: DistrictAnalytics[]; hotspots: Hotspot[];
   stations: StationAnalytics[]; responders: ResponderAnalytics[]; dispatchers: DispatcherAnalytics[]; categories: CategoryAnalytics[]; bySeverity: CountAndTiming[];
   outcomes: OutcomeCount[]; sources: SourceCount[]; situations: SituationCount[]; rulesFired: RuleFired[]; findings: Finding[]; asOf: string;
+  regions?: RegionAnalytics[] | null; institutionsLeague?: InstitutionAnalytics[] | null; matrix?: MatrixRow[] | null; recommendations?: Recommendation[] | null;
 };
 export type AnalyticsExport = { fileName: string; csv: string; rows: number };
 

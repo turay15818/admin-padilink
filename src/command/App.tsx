@@ -14,11 +14,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { BrowserRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { loadSession, onSessionChange } from '../api/client';
 import { Icon, type IconName } from './icons';
-import { authApi, commandApi, ROLE_WORDS, type Access, type DeskDirectory, type DispatchQueue, type FleetSummary } from './api';
+import { authApi, commandApi, deskRoleWords, LEVEL_WORDS, ROLE_WORDS, type Access, type DeskDirectory, type DispatchQueue, type FleetSummary, type HierarchyOverview } from './api';
 import { SignIn } from './SignIn';
 import { T } from './theme';
 import { Btn, Crest, LiveDot, Loading, Num, SECTOR_TONES, crestText } from './ui';
 import { CommandProvider, useCommand } from './useCommand';
+import { AlarmLayer, AlarmProvider, SoundToggle } from './Alarm';
 import { Overview } from './pages/Overview';
 import { MapPage } from './pages/MapPage';
 import { Queue } from './pages/Queue';
@@ -30,6 +31,11 @@ import { People } from './pages/People';
 import { Analytics } from './pages/Analytics';
 import { Report } from './pages/Report';
 import { Settings } from './pages/Settings';
+import { AlarmRules } from './pages/AlarmRules';
+import { AlarmHistoryPage } from './pages/AlarmHistory';
+import { Districts } from './pages/Districts';
+import { District } from './pages/District';
+import { StationPage } from './pages/StationPage';
 
 /**
  * Where the app lives. On its own host (command.vacancysl.com) it is the root; served from
@@ -74,10 +80,15 @@ export function App() {
             <Route path="/institution" element={<Institution />} />
             <Route path="/institution/:tab" element={<Institution />} />
             <Route path="/stations" element={<Navigate to="/institution/offices" replace />} />
+            <Route path="/stations/:id" element={<StationPage />} />
+            <Route path="/districts" element={<Districts />} />
+            <Route path="/districts/:slug" element={<District />} />
             <Route path="/people" element={<People />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/analytics/report" element={<Report />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/alarm" element={<AlarmRules />} />
+            <Route path="/settings/alarm/history" element={<AlarmHistoryPage />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
@@ -91,7 +102,7 @@ export function App() {
 type NavItem = { to: string; label: string; icon: IconName; end?: boolean; key: string; hint: string };
 type NavGroup = { title: string; items: NavItem[] };
 
-const GROUPS: NavGroup[] = [
+const BASE_GROUPS: NavGroup[] = [
   { title: 'Live', items: [
     { to: '/', label: 'Overview', icon: 'home', end: true, key: 'o', hint: 'The wall at a glance' },
     { to: '/map', label: 'Live map', icon: 'map', key: 'm', hint: 'Every open incident and responder' },
@@ -108,6 +119,21 @@ const GROUPS: NavGroup[] = [
   ] },
 ];
 
+/** The rung this person stands on decides the ladder's one entry: their station, their district, or the country. */
+function ladderGroup(access: Access, overview: HierarchyOverview | null): NavGroup | null {
+  const level = overview?.level ?? access.level;
+  if (level === 1) {
+    const to = overview?.homeStationId ? `/stations/${overview.homeStationId}` : null;
+    return to ? { title: 'Command', items: [{ to, label: 'My station', icon: 'facility', key: 'd', hint: 'What is going on at your station' }] } : null;
+  }
+  if (level === 2) {
+    const slug = overview?.homeDistrictSlug ?? access.districtSlug;
+    return slug ? { title: 'Command', items: [{ to: `/districts/${slug}`, label: 'My district', icon: 'sitemap', key: 'd', hint: 'Every station in your district' }] } : null;
+  }
+  if (level >= 3) return { title: 'Command', items: [{ to: '/districts', label: 'Districts', icon: 'sitemap', key: 'd', hint: 'All sixteen districts and their stations' }] };
+  return null;
+}
+
 const RAIL_KEY = 'vacancy.command.rail';
 
 function Shell() {
@@ -117,6 +143,7 @@ function Shell() {
   const [vitals, setVitals] = useState<DispatchQueue | null>(null);
   const [fleet, setFleet] = useState<FleetSummary | null>(null);
   const [directory, setDirectory] = useState<DeskDirectory | null>(null);
+  const [ladder, setLadder] = useState<HierarchyOverview | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const fullBleed = location.pathname === '/map' || location.pathname === '/analytics/report';
@@ -131,6 +158,16 @@ function Shell() {
     if (tick % 10 !== 0 && !location.pathname.startsWith('/institution')) return;
     commandApi.directory(institutionId).then(setDirectory).catch(() => setDirectory(null));
   }, [tick, institutionId, location.pathname]);
+  // The ladder's own numbers move slowly too. A national desk with no institution chosen has no ladder to read.
+  useEffect(() => {
+    if (access.national && !institutionId) { setLadder(null); return; }
+    if (tick % 10 !== 0 && !location.pathname.startsWith('/districts') && !location.pathname.startsWith('/stations')) return;
+    commandApi.hierarchy(7, institutionId).then(setLadder).catch(() => { /* the entry goes quiet */ });
+  }, [tick, institutionId, access.national, location.pathname]);
+  const groups = useMemo(() => {
+    const rung = ladderGroup(access, ladder);
+    return rung ? [BASE_GROUPS[0], rung, ...BASE_GROUPS.slice(1)] : BASE_GROUPS;
+  }, [access, ladder]);
   useEffect(() => { try { window.localStorage.setItem(RAIL_KEY, collapsed ? 'narrow' : 'wide'); } catch { /* fine */ } }, [collapsed]);
 
   // "g" then a letter jumps between screens; "[" folds the rail. Never while typing.
@@ -142,7 +179,7 @@ function Shell() {
       if (e.key === '[') { setCollapsed(c => !c); return; }
       if (chord.current) {
         window.clearTimeout(chord.current); chord.current = null;
-        const hit = GROUPS.flatMap(g => g.items).find(i => i.key === e.key.toLowerCase());
+        const hit = groups.flatMap(g => g.items).find(i => i.key === e.key.toLowerCase());
         if (hit) { e.preventDefault(); navigate(hit.to); }
         else if (e.key.toLowerCase() === 's') navigate('/settings');
         return;
@@ -151,7 +188,7 @@ function Shell() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [navigate]);
+  }, [navigate, groups]);
 
   const openNow = vitals?.cards.length ?? 0;
   const p1 = vitals?.p1Open ?? 0;
@@ -163,7 +200,9 @@ function Shell() {
   const minutesLeft = endsAt ? Math.max(0, Math.round((endsAt.getTime() - clock.getTime()) / 60000)) : null;
   const institution = institutions.find(i => i.id === institutionId) ?? null;
   const tone = SECTOR_TONES[(institution ? sectorToneGuess(institution.sectorCode) : sectorToneGuess(access.sectorCode)) ?? 'navy'];
-  const roleWords = access.title ?? (access.national ? 'National desk' : access.role === 2 ? (access.facilityName ? 'Station supervisor' : 'Institution administrator') : ROLE_WORDS[access.role] ?? 'Desk');
+  const roleWords = access.title ?? (access.national ? 'National desk' : access.role === 2 ? deskRoleWords(2, access.facilityName, access.level || null) : ROLE_WORDS[access.role] ?? 'Desk');
+  const scopeLine = access.national ? null : access.level === 1 ? access.facilityName : access.level === 2 ? `${access.districtName ?? 'District'} district` : access.level === 3 ? 'Nationwide' : null;
+  const attentionNow = ladder?.attention.filter(a => a.weight === 'high').length ?? 0;
   const width = collapsed ? 68 : 240;
 
   const badges: Record<string, ReactNode> = useMemo(() => ({
@@ -171,11 +210,16 @@ function Shell() {
     '/map': openNow > 0 ? <Badge tone="neutral" title={`${openNow} open`}>{openNow}</Badge> : null,
     '/fleet': fleet && fleet.onDuty > 0 ? <Badge tone="good" title={`${fleet.onDuty} on duty · ${fleet.free} free`}>{fleet.onDuty}</Badge> : null,
     '/roster': fleet && fleet.rosteredNotOn > 0 ? <Badge tone="warn" title={`${fleet.rosteredNotOn} rostered but not on`}>{fleet.rosteredNotOn}</Badge> : null,
+    '/districts': attentionNow > 0 ? <Badge tone="bad" title={`${attentionNow} to deal with now`}>{attentionNow}</Badge> : null,
+    ...(ladder?.homeStationId ? { [`/stations/${ladder.homeStationId}`]: attentionNow > 0 ? <Badge tone="bad" title={`${attentionNow} to deal with now`}>{attentionNow}</Badge> : null } : {}),
+    ...(ladder?.homeDistrictSlug && ladder.level === 2 ? { [`/districts/${ladder.homeDistrictSlug}`]: attentionNow > 0 ? <Badge tone="bad" title={`${attentionNow} to deal with now`}>{attentionNow}</Badge> : null } : {}),
     '/institution': urgent > 0 ? <Badge tone="bad" title={`${urgent} to fix today`}>{urgent}</Badge> : readiness !== null && readiness < 85 ? <Badge tone="warn" title={`Readiness ${readiness} of 100`}>{readiness}</Badge> : null,
-  }), [unowned, p1, openNow, fleet, urgent, readiness]);
+  }), [unowned, p1, openNow, fleet, urgent, readiness, attentionNow, ladder]);
 
   return (
+    <AlarmProvider queue={vitals}>
     <div style={{ display: 'flex', minHeight: '100vh', background: T.bg }}>
+      <AlarmLayer />
       <nav className={open ? 'cc-rail cc-rail-open' : 'cc-rail'} aria-label="Command centre" data-narrow={collapsed ? '1' : '0'}
         style={{ width, flexShrink: 0, background: `linear-gradient(180deg, ${T.surface} 0%, ${T.bg} 100%)`, borderRight: `1px solid ${T.line}`, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', transition: 'width .18s ease', overflow: 'hidden' }}>
         {/* brand */}
@@ -204,10 +248,10 @@ function Shell() {
                 {access.national || institutions.length > 1 ? (
                   <select aria-label="Institution" value={institutionId ?? ''} onChange={e => setInstitution(e.target.value || null)} className="cc-picker" style={{ width: '100%', fontSize: 12.5, fontWeight: 600, padding: '2px 0', border: 'none', background: 'transparent', color: T.text, cursor: 'pointer', appearance: 'auto' }}>
                     {access.national ? <option value="">Every institution</option> : null}
-                    {institutions.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                    {institutions.map(i => <option key={i.id} value={i.id}>{i.name}{i.oversight ? ' · ministry' : ''}</option>)}
                   </select>
                 ) : <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{institutionName ?? access.institutionName ?? 'Vacancy'}</div>}
-                {access.facilityName && !access.national ? <div style={{ fontSize: 10.5, color: T.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{access.facilityName}</div> : institution && access.national ? <div style={{ fontSize: 10.5, color: T.muted }}>{institution.sectorName}</div> : null}
+                {scopeLine && !access.national ? <div title={access.scopeLabel ?? undefined} style={{ fontSize: 10.5, color: T.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scopeLine}</div> : institution && access.national ? <div style={{ fontSize: 10.5, color: T.muted }}>{institution.sectorName}</div> : null}
               </div>
             </div>
           )}
@@ -222,7 +266,7 @@ function Shell() {
 
         {/* the screens */}
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: collapsed ? '8px 0' : '8px 10px', display: 'flex', flexDirection: 'column', gap: 10, alignContent: 'start' }}>
-          {GROUPS.map(group => (
+          {groups.map(group => (
             <div key={group.title}>
               {collapsed ? <div style={{ height: 1, background: T.line, margin: '2px 16px 8px' }} /> : <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.6, textTransform: 'uppercase', color: T.subtle, padding: '4px 10px 5px' }}>{group.title}</div>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -278,7 +322,9 @@ function Shell() {
           <Vital label="P1 open" value={p1} tone={p1 > 0 ? T.bad : T.subtle} pulse={p1 > 0} onClick={() => navigate('/queue?filter=p1')} />
           {fleet ? <Vital label="On duty" value={fleet.onDuty} tone={fleet.onDuty > 0 ? T.good : T.subtle} onClick={() => navigate('/fleet')} /> : null}
           <span style={{ flex: 1 }} />
-          <span style={{ fontSize: 11, color: T.subtle, display: 'flex', alignItems: 'center', gap: 6 }} title="Press g then a letter to jump: o overview · m map · q queue · f fleet · r roster · p people · i institution · a analytics · s settings. [ folds the rail."><Icon name="keyboard" size={13} /> g + key</span>
+          {access.scopeLabel && !access.national ? <span className="cc-scope" title={`You see ${access.scopeLabel}. ${LEVEL_WORDS[access.level] ?? ''}`} style={{ fontSize: 11, color: T.muted, display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><Icon name="shield" size={13} color={T.subtle} />{access.scopeLabel}</span> : null}
+          <span style={{ fontSize: 11, color: T.subtle, display: 'flex', alignItems: 'center', gap: 6 }} title="Press g then a letter to jump: o overview · m map · q queue · f fleet · r roster · p people · d districts or your station · i institution · a analytics · s settings. [ folds the rail."><Icon name="keyboard" size={13} /> g + key</span>
+          <SoundToggle />
           <LiveDot up={socket} />
           <Num size={12} color={T.muted}>{clock.toISOString().slice(11, 19)}<span style={{ color: T.subtle }}> UTC</span></Num>
         </header>
@@ -287,6 +333,7 @@ function Shell() {
         </main>
       </div>
     </div>
+    </AlarmProvider>
   );
 }
 

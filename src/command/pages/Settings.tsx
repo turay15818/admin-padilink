@@ -3,17 +3,18 @@
  * room is doing. Deliberately small. There is no theme to choose — the command centre is
  * dark because the wall is — and no preferences that would make two desks look different.
  */
-import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { authApi, ROLE_WORDS } from '../api';
 import { T } from '../theme';
 import { Btn, Eyebrow, LiveDot, Num, Panel, Pill, fmtDateTime } from '../ui';
 import { useCommand } from '../useCommand';
+import { testAlarm, useAlarm } from '../Alarm';
 
 export function Settings() {
   const { access, socket, signOut, shapes, tick, clock } = useCommand();
   const session = authApi.session();
-  const [sound, setSound] = useState<boolean>(() => { try { return window.localStorage.getItem('vacancy.command.sound') === '1'; } catch { return false; } });
-  useEffect(() => { try { window.localStorage.setItem('vacancy.command.sound', sound ? '1' : '0'); } catch { /* fine */ } }, [sound]);
+  const alarm = useAlarm();
   const left = session?.expiresAt ? Math.max(0, Math.round((new Date(session.expiresAt).getTime() - clock.getTime()) / 60_000)) : null;
 
   return (
@@ -30,13 +31,26 @@ export function Settings() {
       </Panel>
       <Panel title="The room">
         <Row label="Live feed" value={<LiveDot up={socket} />} />
-        <Row label="Refreshes" value={<><Num>{tick}</Num><span style={{ color: T.subtle }}> since you opened the desk · every nudge from the hub, and every 30 s regardless</span></>} />
+        <Row label="Refreshes" value={<><Num>{tick}</Num><span style={{ color: T.subtle }}> since you opened the desk · every nudge from the hub, and every 15 s regardless</span></>} />
         <Row label="District outlines" value={<><Num>{shapes.length}</Num><span style={{ color: T.subtle }}> loaded</span></>} />
         <Row label="API" value={<Num>{authApi.apiHost().replace(/^https?:\/\//, '') || '—'}</Num>} />
         <Row label="Clock" value={<><Num>{clock.toISOString().slice(11, 19)}</Num><span style={{ color: T.subtle }}> UTC — Sierra Leone keeps UTC all year, so every time here is local time</span></>} />
         <div style={{ marginTop: 12 }}>
-          <Eyebrow style={{ marginBottom: 6 }}>This browser</Eyebrow>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, cursor: 'pointer' }}><input type="checkbox" checked={sound} onChange={e => setSound(e.target.checked)} style={{ accentColor: T.accent }} /> Remember that this screen is a wall display (kept for a later release — nothing changes yet)</label>
+          <Eyebrow style={{ marginBottom: 6 }}>When a report comes in</Eyebrow>
+          <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.6 }}>A report your institution has set to the siren breathes a red frame round the window, drops a banner with a waiting timer, sounds a siren every few seconds, flashes this tab's title and — with this browser's permission — sends a desktop notification while the window is hidden. It stops when somebody on a desk takes the report, never on a timer. Only the siren can be turned off, and only in this browser.</div>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, cursor: 'pointer', marginTop: 8 }}><input type="checkbox" checked={alarm.sound} onChange={e => alarm.setSound(e.target.checked)} style={{ accentColor: T.accent }} /> Sound the siren in this browser</label>
+          {alarm.sound && alarm.state === 'blocked' ? <div style={{ fontSize: 11.5, color: T.warn, marginTop: 6 }}>The browser is holding sound back until you click on the page. Click anywhere once, then test it.</div> : null}
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <Btn tone="danger" onClick={() => testAlarm(1)}>Test a critical alarm</Btn>
+            <Btn onClick={() => testAlarm(2)}>Test an urgent one</Btn>
+            <Btn onClick={() => testAlarm(3)}>Test a new report</Btn>
+          </div>
+          <div style={{ fontSize: 11, color: T.subtle, marginTop: 6 }}>A test raises a made-up report on this screen only. Nothing is sent to anyone.</div>
+          <div style={{ marginTop: 12 }}>
+            <Link to="/settings/alarm" style={{ fontSize: 12.5, fontWeight: 600 }}>Choose which reports sound the siren ›</Link>
+            <Link to="/settings/alarm/history" style={{ fontSize: 12.5, fontWeight: 600, marginLeft: 14 }}>What rang, and who took it ›</Link>
+            <div style={{ fontSize: 11, color: T.subtle, marginTop: 3, lineHeight: 1.5 }}>By severity, by kind of report, and by what else is going on — children, a crowd, a report nobody has taken.</div>
+          </div>
         </div>
       </Panel>
       <Panel title="Keyboard" note="For the person who lives in this room">

@@ -1,0 +1,74 @@
+/* Run with: node scripts/alarm.check.mjs — checks the rules in src/command/alarmRules.ts. */
+import ts from 'typescript';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+const out = path.join(os.tmpdir(), 'vacancy-alarm.mjs');
+fs.writeFileSync(out, ts.transpileModule(fs.readFileSync('src/command/alarmRules.ts','utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
+const a = await import(pathToFileURL(out).href);
+let pass=0, fail=0; const ok=(n,c)=>{ if(c){pass++;console.log('  PASS ',n);} else {fail++;console.log('  FAIL ',n);} };
+const card=(id,sev,extra={})=>({id,number:'EM-'+id,category:1,situationWords:'Road crash',severity:sev,status:1,isSensitive:false,isTraining:false,sectorCode:'police',districtSlug:'western-area-urban',community:'Hill Station',landmark:null,hasPin:true,reportedAt:'',ageMinutes:0,facilityName:'Lumley Police Station',institutionName:'SLP',dispatcherName:null,unowned:true,escalationLevel:0,peopleAffected:null,...extra});
+const seen=new Map();
+ok('first load seeds and is the caller\'s call', a.fresh(seen,[card('a',1)],0).length===1);
+// the shell skips the alarm on first load by priming; fresh() on same cards again gives none
+ok('the same queue again is not new', a.fresh(seen,[card('a',1)],1).length===0);
+const n=a.fresh(seen,[card('a',1),card('b',3),card('t',1,{isTraining:true})],2);
+ok('a new P3 is new, training never', n.length===1 && n[0].id==='b' && n[0].level==='new');
+const up=a.fresh(seen,[card('b',1)],3);
+ok('a report upgraded to P1 is raised again', up.length===1 && up[0].raised && up[0].level==='critical');
+const down=a.fresh(seen,[card('b',3)],4);
+ok('a downgrade is not an alarm', down.length===0);
+const sens=a.toAlert(card('s',1,{isSensitive:true}),0);
+ok('a sensitive report reads out nothing', sens.words==='' && sens.where==='' && sens.by===null);
+ok('level by severity', a.levelOf(1)==='critical' && a.levelOf(2)==='high' && a.levelOf(3)==='new' && a.levelOf(5)==='new');
+const al=[a.toAlert(card('a',1),0), a.toAlert(card('b',3),0)];
+ok('a critical goes when it is taken', a.stillLive([al[0]],[card('a',1,{unowned:false})],1000).length===0);
+ok('a critical stays while nobody has it', a.stillLive([al[0]],[card('a',1)],600000).length===1);
+ok('a critical goes when it leaves the queue', a.stillLive([al[0]],[],10).length===0);
+ok('a quiet one expires', a.stillLive([al[1]],[card('b',3)],13000).length===0 && a.stillLive([al[1]],[card('b',3)],5000).length===1);
+ok('the loudest is the lowest severity', a.loudest(al).id==='a' && a.loudest([])===null);
+ok('critical sounds now, then every 6 s, then every 15 s, never stops', a.nextSoundAfterMs('critical',0,0)===0 && a.nextSoundAfterMs('critical',3,30000)===6000 && a.nextSoundAfterMs('critical',20,120000)===15000);
+ok('high sounds three times', a.nextSoundAfterMs('high',1,0)===30000 && a.nextSoundAfterMs('high',3,0)===null);
+ok('quiet sounds once', a.nextSoundAfterMs('new',0,0)===0 && a.nextSoundAfterMs('new',1,0)===null);
+ok('title alternates and restores', a.titleFor(al,0,'Vacancy')==='(2) CRITICAL EM-a' && a.titleFor(al,1,'Vacancy')==='Vacancy' && a.titleFor([],0,'Vacancy')==='Vacancy');
+const nt=a.notificationFor(a.toAlert(card('a',1),0));
+ok('a notification names the number and district, never what happened', nt.title==='Critical report EM-a' && !/crash|Hill|Lumley/i.test(nt.body) && /Western Area Urban/.test(nt.body));
+ok('waiting reads as m:ss', a.waiting(42000)==='0:42' && a.waiting(725000)==='12:05');
+
+// ---- the institution's own rules arrive as a number on each card ----
+const s2=new Map();
+ok('a card with no number falls back to the old severity table', a.rankOf(card('x',1))===3 && a.rankOf(card('x',2))===2 && a.rankOf(card('x',4))===1);
+ok('a card carries its own number: 0 silent, 1 chime, 2 urgent, 3 siren', [0,1,2,3].every(n=>a.rankOf(card('x',2,{alarm:n}))===n));
+const f1=a.fresh(s2,[card('q',4,{alarm:3,alarmWhy:'Fire reports are set to the siren'}),card('r',1,{alarm:0}),card('u',3,{alarm:2})],10);
+ok('a P4 set to the siren is a critical alert, with the reason', f1.length===2 && f1.find(x=>x.id==='q').level==='critical' && f1.find(x=>x.id==='q').why==='Fire reports are set to the siren');
+ok('a P1 the desk set to silent never sounds', !f1.some(x=>x.id==='r'));
+ok('an urgent number is a high alert', f1.find(x=>x.id==='u').level==='high');
+const f2=a.fresh(s2,[card('q',4,{alarm:3}),card('r',1,{alarm:0}),card('u',3,{alarm:2})],11);
+ok('the same queue again is quiet', f2.length===0);
+const f3=a.fresh(s2,[card('u',3,{alarm:3,alarmWhy:'Nobody has taken it for 5 minutes'})],12);
+ok('one that becomes louder — nobody took it — sounds again, as raised', f3.length===1 && f3[0].raised && f3[0].level==='critical' && /5 minutes/.test(f3[0].why));
+const f4=a.fresh(s2,[card('u',3,{alarm:1})],13);
+ok('one that becomes quieter does not', f4.length===0);
+const f5=a.fresh(s2,[card('r',1,{alarm:3})],14);
+ok('a silent one the rules later make loud does', f5.length===1 && f5[0].raised);
+const crit=a.toAlert(card('c',4,{alarm:3}),0);
+ok('an alert goes when its rules now say silent', a.stillLive([crit],[card('c',4,{alarm:0})],1000).length===0 && a.stillLive([crit],[card('c',4,{alarm:3})],1000).length===1);
+ok('a desk asked to join keeps ringing until it answers, even though the lead has an owner', a.stillLive([crit],[card('c',4,{alarm:3,role:'asked',unowned:false})],900000).length===1 && a.stillLive([crit],[card('c',4,{alarm:3,role:'asked',unowned:false})],900000)[0].id==='c');
+ok('but not once it has answered', a.stillLive([crit],[card('c',4,{alarm:3,role:'brought-in',unowned:false})],900000).length===0);
+ok('the old behaviour: an owned critical goes', a.stillLive([crit],[card('c',4,{alarm:3,role:'lead',unowned:false})],900000).length===0);
+ok('a sensitive report reads out nothing, but keeps its reason', (()=>{const t=a.toAlert(card('s',2,{isSensitive:true,alarm:3,alarmWhy:'A private report is set to the siren'}),0);return t.words===''&&t.where===''&&t.why==='A private report is set to the siren';})());
+// ---- a report already waiting when the desk opens, and a server that has not been updated ----
+const w1=a.waitingAtOpen([card('w1',2,{alarm:3}),card('w2',2,{alarm:3,unowned:false}),card('w3',3,{alarm:1}),card('w4',1,{alarm:3,isTraining:true}),card('w5',2,{alarm:2,role:'asked',unowned:false})],0);
+ok('opening the desk to a siren nobody has taken sounds it', w1.some(x=>x.id==='w1'&&x.level==='critical'));
+ok('...but not an owned one, a chime, or a training report', !w1.some(x=>['w2','w3','w4'].includes(x.id)));
+ok('...and a desk that was asked and has not answered is told', w1.some(x=>x.id==='w5'));
+ok('the reason says it was waiting', /Waiting for a person/.test(w1.find(x=>x.id==='w1').why));
+ok('an old API with no number: a P3 nobody took in five minutes is a siren', a.rankOf(card('o',3,{ageMinutes:9}))===3 && a.rankOf(card('o',3,{ageMinutes:2}))===1 && a.rankOf(card('o',3,{ageMinutes:9,unowned:false}))===1);
+ok('built-in rules are noticed only when no card carries a number', a.onBuiltInRules([card('x',1)])===true && a.onBuiltInRules([card('x',1,{alarm:3})])===false && a.onBuiltInRules([])===false);
+// ---- the alarm history page's helpers ----
+const tsSrc = (await import('node:fs')).readFileSync('src/command/pages/AlarmHistory.tsx','utf8');
+ok('the history page never draws the words of a private report', /isSensitive \? 'A private report'/.test(tsSrc) && /r\.isSensitive \? '—'/.test(tsSrc));
+ok('the new rules fields are in the client type and saved as they are', /repeatMinutes: number/.test((await import('node:fs')).readFileSync('src/command/api.ts','utf8')) && /tellSupervisorsMinutes: number/.test((await import('node:fs')).readFileSync('src/command/api.ts','utf8')));
+ok('the siren scheduler keeps time when the tab is hidden', /steadyInterval\(\(\) => \{\n\s+const now = Date\.now\(\);/.test((await import('node:fs')).readFileSync('src/command/Alarm.tsx','utf8')));
+console.log(`${pass} passed, ${fail} failed`); process.exit(fail?1:0);
